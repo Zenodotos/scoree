@@ -2,7 +2,7 @@ from django.db import models
 from django.core.validators import RegexValidator
 from datetime import date
 from dateutil.relativedelta import relativedelta
-
+from django.db.models import Q 
 
 class Patient(models.Model):
     GENDER_CHOICES = [
@@ -47,35 +47,33 @@ class Patient(models.Model):
         """Get the most recent visit for this patient"""
         return self.visits.order_by('-visit_date').first()
     
-    def has_diabetes(self):
-        """Check if patient has diabetes diagnosis"""
-        diabetes_codes = ['E10', 'E11', 'E13', 'E14']
-        # Check chronic diagnoses
-        chronic_diabetes = self.chronic_diagnoses.filter(
-            diagnosis_code__startswith__in=diabetes_codes
-        ).exists()
-        
-        # Check visit diagnoses
-        visit_diabetes = VisitDiagnosis.objects.filter(
-            visit__patient=self,
-            diagnosis_code__startswith__in=diabetes_codes
-        ).exists()
-        
-        return chronic_diabetes or visit_diabetes
+    def has_diabetes(self) -> bool:
+        codes = ['E10', 'E11', 'E13', 'E14']
+        q = Q()
+        for c in codes:
+            q |= Q(chronic_diagnoses__diagnosis_code__startswith=c)
+            q |= Q(visits__diagnoses__diagnosis_code__startswith=c)
+        return self.__class__.objects.filter(pk=self.pk).filter(q).exists()
     
     def get_diabetes_age_at_diagnosis(self):
         """Get age at first diabetes diagnosis"""
         diabetes_codes = ['E10', 'E11', 'E13', 'E14']
-        
-        # Check chronic diagnoses first (more reliable)
-        chronic_dx = self.chronic_diagnoses.filter(
-            diagnosis_code__startswith__in=diabetes_codes,
-            age_at_diagnosis__isnull=False
-        ).order_by('diagnosed_at').first()
-        
-        if chronic_dx and chronic_dx.age_at_diagnosis:
+
+        # Build a Q that matches any diagnosis_code starting with one of the codes
+        prefix_q = Q()
+        for c in diabetes_codes:
+            prefix_q |= Q(diagnosis_code__startswith=c)
+
+        # Now filter chronic_diagnoses using that Q plus age_at_diagnosis not null
+        chronic_dx = (
+            self.chronic_diagnoses
+                .filter(prefix_q, age_at_diagnosis__isnull=False)
+                .order_by('diagnosed_at')
+                .first()
+        )
+
+        if chronic_dx:
             return float(chronic_dx.age_at_diagnosis)
-        
         return None
     
     def get_smoking_status(self):

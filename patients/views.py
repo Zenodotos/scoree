@@ -47,7 +47,7 @@ class PatientListView(ListView):
         if diabetes_filter in ('yes', 'no'):
             diabetes_codes = ['E10', 'E11', 'E13', 'E14']
 
-            # zbuduj Q() testujące każdy kod (zarówno chronic, jak i visits)
+            # Build Q() objects for each diabetes code
             diabetes_q = Q()
             for code in diabetes_codes:
                 diabetes_q |= Q(chronic_diagnoses__diagnosis_code__startswith=code)
@@ -101,12 +101,14 @@ class PatientListView(ListView):
         patients_with_visits = Patient.objects.filter(visits__isnull=False).distinct().count()
         patients_with_scores = Patient.objects.filter(score2_results__isnull=False).distinct().count()
         
-        # Diabetes statistics
+        # Diabetes statistics - FIXED
         diabetes_codes = ['E10', 'E11', 'E13', 'E14']
-        diabetic_patients = Patient.objects.filter(
-            Q(chronic_diagnoses__diagnosis_code__startswith__in=diabetes_codes) |
-            Q(visits__diagnoses__diagnosis_code__startswith__in=diabetes_codes)
-        ).distinct().count()
+        diabetes_q = Q()
+        for code in diabetes_codes:
+            diabetes_q |= Q(chronic_diagnoses__diagnosis_code__startswith=code)
+            diabetes_q |= Q(visits__diagnoses__diagnosis_code__startswith=code)
+            
+        diabetic_patients = Patient.objects.filter(diabetes_q).distinct().count()
         
         context.update({
             'total_patients': total_patients,
@@ -162,7 +164,8 @@ class PatientDetailView(DetailView):
             visit_data.append({
                 'visit': visit,
                 'scores': visit_scores,
-                'has_score': len(visit_scores) > 0
+                'has_score': bool(visit_scores),
+                'age': patient.calculate_age(visit.visit_date),   # ← add this
             })
         
         # Get smoking status
@@ -401,19 +404,23 @@ class ImportDataView(View):
         results = {'visits': 0, 'diagnoses': 0}
         
         # Create visit if visit_date exists and visit doesn't exist yet
+
+
         if first_row.visit_date:
+            # build defaults dict, skipping any NaN/None
+            raw = first_row  # your pandas Series
+            defaults = {}
+            for field in ('systolic_pressure','hba1c','egfr','cholesterol_total','cholesterol_hdl'):
+                val = raw[field]
+                # pd.isna covers both None and np.nan
+                if not pd.isna(val):
+                    defaults[field] = val
+
             visit, visit_created = Visit.objects.get_or_create(
                 patient=patient,
                 visit_date=first_row.visit_date,
-                defaults={
-                    'systolic_pressure': first_row.systolic_pressure,
-                    'hba1c': first_row.hba1c,
-                    'egfr': first_row.egfr,
-                    'cholesterol_total': first_row.cholesterol_total,
-                    'cholesterol_hdl': first_row.cholesterol_hdl,
-                }
+                defaults=defaults
             )
-            
             if visit_created:
                 results['visits'] = 1
             
