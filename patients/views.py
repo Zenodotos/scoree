@@ -1,6 +1,8 @@
+from django.db.models import Q, Count, Prefetch, Max, Avg
+
+# The rest of the imports remain the same:
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.db.models import Q, Count, Prefetch, Max
 from django.views.generic import ListView, DetailView
 from django.views import View
 from django.http import JsonResponse
@@ -20,13 +22,12 @@ from .models import Patient, Visit, PatientDiagnosis, VisitDiagnosis, Diagnosis
 from .forms import VisitForm, PatientSmokingForm
 from score2.models import Score2Result
 
-
 class PatientListView(ListView):
     model = Patient
     template_name = 'patients/patient_list.html'
     context_object_name = 'patients'
     paginate_by = 20
-    
+        
     def get_queryset(self):
         queryset = Patient.objects.select_related().prefetch_related(
             'visits',
@@ -87,19 +88,13 @@ class PatientListView(ListView):
                 Q(full_name__icontains=search_query)
             )
         
-        # Filter by diabetes status
-        diabetes_filter = self.request.GET.get('diabetes')
-        if diabetes_filter in ('yes', 'no'):
-            diabetes_codes = ['E10', 'E11', 'E13', 'E14']
-            diabetes_q = Q()
-            for code in diabetes_codes:
-                diabetes_q |= Q(chronic_diagnoses__diagnosis_code__startswith=code)
-                diabetes_q |= Q(visits__diagnoses__diagnosis_code__startswith=code)
-
-            if diabetes_filter == 'yes':
-                queryset = queryset.filter(diabetes_q).distinct()
-            else:  # 'no'
-                queryset = queryset.exclude(diabetes_q)
+        # Filter by risk level instead of diabetes
+        risk_filter = self.request.GET.get('risk_level')
+        if risk_filter and risk_filter != 'all':
+            queryset = queryset.filter(
+                score2_results__risk_level=risk_filter,
+                score2_results__is_calculation_successful=True
+            ).distinct()
         
         # Filter by SCORE2 calculation status
         score_filter = self.request.GET.get('score_status')
@@ -138,23 +133,29 @@ class PatientListView(ListView):
             score2_results__is_calculation_successful=True
         ).distinct().count()
         
-        # Diabetes statistics
-        diabetes_codes = ['E10', 'E11', 'E13', 'E14']
-        diabetes_q = Q()
-        for code in diabetes_codes:
-            diabetes_q |= Q(chronic_diagnoses__diagnosis_code__startswith=code)
-            diabetes_q |= Q(visits__diagnoses__diagnosis_code__startswith=code)
-            
-        diabetic_patients = eligible_patients.filter(diabetes_q).distinct().count()
+        # Risk level statistics instead of diabetes
+        risk_level_stats = {}
+        from score2.models import Score2Result
+        
+        for risk_level, display_name in Score2Result.RISK_LEVEL_CHOICES:
+            if risk_level != 'not_applicable' and risk_level != 'age_out_of_range':
+                count = eligible_patients.filter(
+                    score2_results__risk_level=risk_level,
+                    score2_results__is_calculation_successful=True
+                ).distinct().count()
+                risk_level_stats[risk_level] = {
+                    'count': count,
+                    'display_name': display_name
+                }
         
         context.update({
             'total_patients': total_patients,
             'eligible_patients': eligible_count,
             'patients_with_visits': patients_with_visits,
             'patients_with_scores': patients_with_scores,
-            'diabetic_patients': diabetic_patients,
+            'risk_level_stats': risk_level_stats,
             'search_query': self.request.GET.get('search', ''),
-            'diabetes_filter': self.request.GET.get('diabetes', ''),
+            'risk_filter': self.request.GET.get('risk_level', ''),
             'age_filter': self.request.GET.get('age', 'score_eligible'),
             'score_filter': self.request.GET.get('score_status', ''),
         })
@@ -201,6 +202,64 @@ class PatientDetailView(DetailView):
                     messages.error(request, f'Błąd: {e.message}')
             else:
                 messages.error(request, 'Błąd walidacji formularza.')
+        
+        # Update visit and calculate SCORE2
+        elif 'update_visit_and_calculate' in request.POST:
+            visit_id = request.POST.get('visit_id')
+            visit = get_object_or_404(Visit, id=visit_id, patient=self.object)
+            form = VisitForm(request.POST, instance=visit)
+            if form.is_valid():
+                try:
+                    form.save()
+                    
+                    # Calculate SCORE2 for this visit
+                    from score2.views import CalculateScore2View
+                    calculator = CalculateScore2View()
+                    result = calculator._calculate_score_for_visit(self.object, visit)
+                    
+                    if result.is_calculation_successful:
+                        messages.success(
+                            request, 
+                            f'Wizyta zaktualizowana i SCORE2 obliczone: {result.score_type} = {result.score_value}%'
+                        )
+                    else:
+                        messages.warning(
+                            request, 
+                            f'Wizyta zaktualizowana, ale nie można obliczyć SCORE2: {result.missing_data_reason}'
+                        )
+                    
+                    return redirect('patients:patient_detail', pk=self.object.pk)
+                except ValidationError as e:
+                    messages.error(request, f'Błąd: {e.message}')
+                except Exception as e:
+                    messages.error(request, f'Błąd podczas obliczania: {str(e)}')
+            else:
+                messages.error(request, 'Błąd walidacji formularza.')
+        
+        # Calculate SCORE2 for specific visit
+        elif 'calculate_visit_score' in request.POST:
+            visit_id = request.POST.get('visit_id')
+            visit = get_object_or_404(Visit, id=visit_id, patient=self.object)
+            
+            try:
+                from score2.views import CalculateScore2View
+                calculator = CalculateScore2View()
+                result = calculator._calculate_score_for_visit(self.object, visit)
+                
+                if result.is_calculation_successful:
+                    messages.success(
+                        request, 
+                        f'SCORE2 obliczone dla wizyty {visit.visit_date}: {result.score_type} = {result.score_value}%'
+                    )
+                else:
+                    messages.warning(
+                        request, 
+                        f'Nie można obliczyć SCORE2 dla wizyty {visit.visit_date}: {result.missing_data_reason}'
+                    )
+            except Exception as e:
+                messages.error(request, f'Błąd podczas obliczania: {str(e)}')
+            
+            return redirect('patients:patient_detail', pk=self.object.pk)
         
         # Update smoking status
         elif 'update_smoking' in request.POST:
@@ -269,7 +328,7 @@ class PatientDetailView(DetailView):
         score_results = {}
         for result in patient.score2_results.all():
             visit_id = result.visit.id
-            score_results[visit_id] = result  # Tylko jeden wynik na wizytę
+            score_results[visit_id] = result
         
         # Prepare visit data with score results
         visit_data = []
@@ -289,56 +348,120 @@ class PatientDetailView(DetailView):
         has_diabetes = patient.has_diabetes()
         diabetes_age = patient.get_diabetes_age_at_diagnosis()
         
+        # SCORE2 results analysis
+        successful_scores = patient.score2_results.filter(is_calculation_successful=True).order_by('created_at')
+        score_stats = None
+        
+        if successful_scores.count() > 1:
+            first_score = successful_scores.first()
+            latest_score = successful_scores.last()
+            
+            if first_score.score_value and latest_score.score_value:
+                trend = float(latest_score.score_value) - float(first_score.score_value)
+                score_stats = {
+                    'count': successful_scores.count(),
+                    'first_score': first_score,
+                    'latest_score': latest_score,
+                    'trend': trend,
+                    'trend_direction': 'up' if trend > 0 else 'down' if trend < 0 else 'stable',
+                    'trend_percentage': abs(trend),
+                    'average_score': successful_scores.aggregate(Avg('score_value'))['score_value__avg']
+                }
+        
         # Calculate what scores are possible for latest visit
         latest_visit = patient.get_latest_visit()
         possible_scores = []
         missing_data = []
+        data_sources = {}
         
         if latest_visit:
             age = patient.calculate_age(latest_visit.visit_date)
             
-            # Check data availability
-            has_sbp = latest_visit.systolic_pressure is not None
-            has_total_chol = latest_visit.cholesterol_total is not None
-            has_hdl_chol = latest_visit.cholesterol_hdl is not None
-            has_hba1c = latest_visit.hba1c is not None
-            has_egfr = latest_visit.egfr is not None
-            
-            if not has_sbp:
-                missing_data.append('Ciśnienie skurczowe')
-            if not has_total_chol:
-                missing_data.append('Cholesterol całkowity')
-            if not has_hdl_chol:
-                missing_data.append('Cholesterol HDL')
-            
-            # Determine possible score types
-            if 40 <= age <= 69 and not has_diabetes and has_sbp and has_total_chol and has_hdl_chol:
-                possible_scores.append('SCORE2')
-            elif 40 <= age <= 69 and has_diabetes and has_sbp and has_total_chol and has_hdl_chol:
-                if diabetes_age and has_hba1c and has_egfr:
-                    possible_scores.append('SCORE2-Diabetes')
+            # Check data availability and sources for each score type
+            if 40 <= age <= 69:
+                # SCORE2 requirements
+                missing_score2 = []
+                sources_score2 = {}
+                
+                # Systolic pressure
+                if latest_visit.systolic_pressure:
+                    sources_score2['systolic_pressure'] = f"{latest_visit.systolic_pressure} mmHg (wizyta)"
                 else:
-                    if not diabetes_age:
-                        missing_data.append('Wiek w momencie diagnozy cukrzycy')
-                    if not has_hba1c:
-                        missing_data.append('HbA1c')
-                    if not has_egfr:
-                        missing_data.append('eGFR')
-            elif 70 <= age <= 89 and has_sbp and has_total_chol and has_hdl_chol:
-                possible_scores.append('SCORE2-OP')
-            elif age < 40:
-                missing_data.append('Wiek poniżej 40 lat (minimum dla wszystkich skal)')
-            elif age > 89:
-                missing_data.append('Wiek powyżej 89 lat (maksimum dla SCORE2-OP)')
-        
-        # Forms
-        visit_form = VisitForm()
-        smoking_form = PatientSmokingForm(instance=patient)
-        
-        # Edit forms for each visit
-        edit_forms = {}
-        for visit in visits:
-            edit_forms[visit.id] = VisitForm(instance=visit)
+                    missing_score2.append('ciśnienie skurczowe')
+                
+                # Cholesterol
+                if latest_visit.cholesterol_total and latest_visit.cholesterol_hdl:
+                    sources_score2['cholesterol'] = f"TC: {latest_visit.cholesterol_total}, HDL: {latest_visit.cholesterol_hdl} (wizyta)"
+                elif latest_visit.cholesterol_total:
+                    missing_score2.append('cholesterol HDL')
+                    sources_score2['cholesterol'] = f"TC: {latest_visit.cholesterol_total} (wizyta), brak HDL"
+                elif latest_visit.cholesterol_hdl:
+                    missing_score2.append('cholesterol całkowity')
+                    sources_score2['cholesterol'] = f"HDL: {latest_visit.cholesterol_hdl} (wizyta), brak TC"
+                else:
+                    missing_score2.append('cholesterol całkowity i HDL')
+                
+                # Smoking status source
+                sources_score2['smoking'] = f"{smoking_status} ({smoking_info})"
+                
+                if not missing_score2:
+                    possible_scores.append('SCORE2')
+                data_sources['SCORE2'] = {'missing': missing_score2, 'sources': sources_score2}
+                
+                # SCORE2-Diabetes requirements (if has diabetes)
+                if has_diabetes:
+                    missing_diabetes = missing_score2.copy()  # Start with SCORE2 requirements
+                    sources_diabetes = sources_score2.copy()
+                    
+                    # Additional diabetes requirements
+                    if latest_visit.hba1c:
+                        sources_diabetes['hba1c'] = f"{latest_visit.hba1c}% (wizyta)"
+                    else:
+                        missing_diabetes.append('hemoglobina glikowana (HbA1c)')
+                    
+                    if latest_visit.egfr:
+                        sources_diabetes['egfr'] = f"{latest_visit.egfr} ml/min/1.73m² (wizyta)"
+                    else:
+                        missing_diabetes.append('eGFR')
+                    
+                    if diabetes_age:
+                        sources_diabetes['diabetes_age'] = f"{diabetes_age} lat (diagnoza)"
+                    else:
+                        missing_diabetes.append('wiek przy diagnozie cukrzycy')
+                    
+                    if not missing_diabetes:
+                        possible_scores.append('SCORE2-Diabetes')
+                    data_sources['SCORE2-Diabetes'] = {'missing': missing_diabetes, 'sources': sources_diabetes}
+            
+            elif age >= 70:
+                # SCORE2-OP requirements
+                missing_op = []
+                sources_op = {}
+                
+                if latest_visit.systolic_pressure:
+                    sources_op['systolic_pressure'] = f"{latest_visit.systolic_pressure} mmHg (wizyta)"
+                else:
+                    missing_op.append('ciśnienie skurczowe')
+                
+                if latest_visit.cholesterol_total and latest_visit.cholesterol_hdl:
+                    sources_op['cholesterol'] = f"TC: {latest_visit.cholesterol_total}, HDL: {latest_visit.cholesterol_hdl} (wizyta)"
+                else:
+                    missing_chol = []
+                    if not latest_visit.cholesterol_total:
+                        missing_chol.append('cholesterol całkowity')
+                    if not latest_visit.cholesterol_hdl:
+                        missing_chol.append('cholesterol HDL')
+                    missing_op.extend(missing_chol)
+                
+                sources_op['smoking'] = f"{smoking_status} ({smoking_info})"
+                sources_op['diabetes'] = f"{'Tak' if has_diabetes else 'Nie'} (diagnoza)"
+                
+                if not missing_op:
+                    possible_scores.append('SCORE2-OP')
+                data_sources['SCORE2-OP'] = {'missing': missing_op, 'sources': sources_op}
+            
+            else:
+                missing_data.append('Wiek poza zakresem 40-89 lat')
         
         context.update({
             'visit_data': visit_data,
@@ -349,9 +472,8 @@ class PatientDetailView(DetailView):
             'latest_visit': latest_visit,
             'possible_scores': possible_scores,
             'missing_data': missing_data,
-            'visit_form': visit_form,
-            'smoking_form': smoking_form,
-            'edit_forms': edit_forms,
+            'data_sources': data_sources,
+            'score_stats': score_stats,
         })
         
         return context

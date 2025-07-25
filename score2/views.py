@@ -8,6 +8,8 @@ from django.core.paginator import Paginator
 from datetime import date
 import numpy as np
 from typing import Optional, Tuple
+from dateutil.relativedelta import relativedelta
+
 
 from patients.models import Patient, Visit
 from .models import Score2Result

@@ -2150,3 +2150,99 @@ INFO 2025-07-25 14:18:11,638 basehttp 341 132983150134976 "GET /patients/import/
 INFO 2025-07-25 14:18:43,748 basehttp 341 132983150134976 "POST /patients/import/ HTTP/1.1" 302 0
 INFO 2025-07-25 14:18:43,777 basehttp 341 132983150134976 "GET /patients/ HTTP/1.1" 200 25449
 INFO 2025-07-25 14:18:45,816 basehttp 341 132983150134976 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:30:03,190 autoreload 341 132983840025472 /app/patients/models.py changed, reloading.
+INFO 2025-07-25 14:30:04,116 autoreload 381 127461462600576 Watching for file changes with StatReloader
+INFO 2025-07-25 14:30:08,633 basehttp 381 127460772636352 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:30:09,866 basehttp 381 127460772636352 "GET /patients/import/ HTTP/1.1" 200 30551
+INFO 2025-07-25 14:30:25,624 basehttp 381 127460772636352 "POST /patients/import/ HTTP/1.1" 302 0
+INFO 2025-07-25 14:30:25,650 basehttp 381 127460772636352 "GET /patients/ HTTP/1.1" 200 25449
+INFO 2025-07-25 14:30:27,694 basehttp 381 127460772636352 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:30:33,154 basehttp 381 127460772636352 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:30:35,160 basehttp 381 127460772636352 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:30:47,249 autoreload 19 126994733923200 Watching for file changes with StatReloader
+INFO 2025-07-25 14:30:54,266 basehttp 19 126994043987648 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:30:56,728 basehttp 19 126994043987648 "GET /patients/import/ HTTP/1.1" 200 30551
+INFO 2025-07-25 14:31:09,008 basehttp 19 126994035594944 "POST /patients/import/ HTTP/1.1" 302 0
+INFO 2025-07-25 14:31:09,046 basehttp 19 126994035594944 "GET /patients/ HTTP/1.1" 200 25449
+INFO 2025-07-25 14:31:11,118 basehttp 19 126994035594944 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:32:06,744 autoreload 19 126994733923200 /app/patients/models.py changed, reloading.
+INFO 2025-07-25 14:32:07,606 autoreload 36 126773142850432 Watching for file changes with StatReloader
+INFO 2025-07-25 14:32:30,890 autoreload 36 126773142850432 /app/patients/models.py changed, reloading.
+INFO 2025-07-25 14:32:31,458 autoreload 49 127508536855424 Watching for file changes with StatReloader
+INFO 2025-07-25 14:32:35,073 basehttp 49 127507846993600 "GET /patients/ HTTP/1.1" 200 24343
+INFO 2025-07-25 14:32:35,795 basehttp 49 127507846993600 "GET /patients/import/ HTTP/1.1" 200 30551
+INFO 2025-07-25 14:33:19,791 basehttp 49 127507846993600 "POST /patients/import/ HTTP/1.1" 302 0
+INFO 2025-07-25 14:33:19,848 basehttp 49 127507846993600 "GET /patients/ HTTP/1.1" 200 56974
+INFO 2025-07-25 14:33:21,931 basehttp 49 127507846993600 "GET /patients/ HTTP/1.1" 200 55859
+INFO 2025-07-25 14:33:29,800 basehttp 49 127507846993600 "POST /score2/calculate-all/ HTTP/1.1" 200 66
+INFO 2025-07-25 14:33:35,764 basehttp 49 127507846993600 "POST /score2/calculate-all/ HTTP/1.1" 200 66
+INFO 2025-07-25 14:34:12,642 basehttp 49 127507846993600 "GET /patients/?page=2 HTTP/1.1" 200 57131
+INFO 2025-07-25 14:35:14,988 autoreload 49 127508536855424 /app/score2/views.py changed, reloading.
+INFO 2025-07-25 14:35:15,475 autoreload 66 125759399816064 Watching for file changes with StatReloader
+INFO 2025-07-25 14:35:18,193 basehttp 66 125758709925568 "GET /patients/?page=2 HTTP/1.1" 200 57131
+INFO 2025-07-25 14:35:27,148 basehttp 66 125758709925568 "POST /score2/calculate-all/ HTTP/1.1" 200 140
+INFO 2025-07-25 14:35:29,229 basehttp 66 125758709925568 "GET /patients/?page=2 HTTP/1.1" 200 60593
+INFO 2025-07-25 14:35:35,392 basehttp 66 125758709925568 "GET /patients/?search=&diabetes=&age=&score_status=calculated HTTP/1.1" 200 60274
+INFO 2025-07-25 14:35:46,831 basehttp 66 125758709925568 "GET /patients/?search=&diabetes=&age=&score_status=calculated&page=2 HTTP/1.1" 200 61715
+INFO 2025-07-25 14:48:56,375 autoreload 66 125759399816064 /app/patients/views.py changed, reloading.
+INFO 2025-07-25 14:48:57,144 autoreload 81 133736946162560 Watching for file changes with StatReloader
+INFO 2025-07-25 14:49:51,465 autoreload 81 133736946162560 /app/patients/views.py changed, reloading.
+INFO 2025-07-25 14:49:52,001 autoreload 94 126306019957632 Watching for file changes with StatReloader
+INFO 2025-07-25 14:49:55,977 basehttp 94 126305321678528 "GET /patients/?search=&diabetes=&age=&score_status=calculated&page=2 HTTP/1.1" 200 86917
+INFO 2025-07-25 14:50:09,707 basehttp 94 126305321678528 "GET /patients/?search=&risk_level=high&age=score_eligible&score_status=calculated HTTP/1.1" 200 85398
+INFO 2025-07-25 14:50:13,593 basehttp 94 126305321678528 "GET /patients/?page=2&risk_level=high&age=score_eligible&score_status=calculated HTTP/1.1" 200 86368
+INFO 2025-07-25 14:50:15,607 basehttp 94 126305321678528 "GET /patients/?page=3&risk_level=high&age=score_eligible&score_status=calculated HTTP/1.1" 200 48543
+INFO 2025-07-25 14:50:27,363 basehttp 94 126305321678528 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=calculated HTTP/1.1" 200 85866
+INFO 2025-07-25 14:50:29,457 basehttp 94 126305321678528 "GET /patients/2321/ HTTP/1.1" 200 34382
+INFO 2025-07-25 14:51:05,294 basehttp 94 126305321678528 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:51:09,268 basehttp 94 126305321678528 "GET /patients/3630/ HTTP/1.1" 200 25784
+INFO 2025-07-25 14:51:16,816 basehttp 94 126305321678528 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=not_calculated HTTP/1.1" 200 87086
+INFO 2025-07-25 14:51:19,069 basehttp 94 126305321678528 "GET /patients/3638/ HTTP/1.1" 200 25520
+INFO 2025-07-25 14:51:33,180 basehttp 94 126305321678528 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:51:34,391 basehttp 94 126305321678528 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:51:41,934 basehttp 94 126305321678528 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=calculated HTTP/1.1" 200 85866
+INFO 2025-07-25 14:51:45,283 basehttp 94 126305321678528 "GET /patients/2335/ HTTP/1.1" 200 33128
+INFO 2025-07-25 14:53:16,884 basehttp 94 126305321678528 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:53:20,538 basehttp 94 126305321678528 "GET /patients/3638/ HTTP/1.1" 200 25520
+INFO 2025-07-25 14:54:09,220 basehttp 94 126305321678528 "GET /patients/3638/ HTTP/1.1" 200 25520
+INFO 2025-07-25 14:55:26,772 basehttp 94 126305321678528 "GET /admin/patients/visit/ HTTP/1.1" 200 83724
+INFO 2025-07-25 14:55:28,826 basehttp 94 126305321678528 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:55:34,774 basehttp 94 126305321678528 "GET /patients/?search=lewinski&risk_level=all&age=score_eligible&score_status= HTTP/1.1" 200 20889
+INFO 2025-07-25 14:55:37,586 basehttp 94 126305321678528 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:57:46,273 basehttp 94 126305330071232 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 14:57:48,416 basehttp 94 126305330071232 "GET /patients/3638/ HTTP/1.1" 200 25520
+INFO 2025-07-25 14:57:59,699 basehttp 94 126305330071232 "GET /patients/3635/ HTTP/1.1" 200 25533
+INFO 2025-07-25 14:58:05,542 basehttp 94 126305330071232 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=calculated HTTP/1.1" 200 85866
+INFO 2025-07-25 14:58:07,557 basehttp 94 126305330071232 "GET /patients/2300/ HTTP/1.1" 200 35196
+INFO 2025-07-25 14:58:27,649 basehttp 94 126305330071232 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=not_calculated HTTP/1.1" 200 87086
+INFO 2025-07-25 14:58:29,282 basehttp 94 126305330071232 "GET /patients/3636/ HTTP/1.1" 200 26301
+INFO 2025-07-25 15:00:04,593 basehttp 94 126305330071232 "GET /patients/import/ HTTP/1.1" 200 30551
+INFO 2025-07-25 15:00:14,531 basehttp 94 126305330071232 "GET /patients/ HTTP/1.1" 200 87182
+WARNING 2025-07-25 15:00:18,182 log 94 126305330071232 Method Not Allowed (GET): /score2/calculate-all/
+WARNING 2025-07-25 15:00:18,193 basehttp 94 126305330071232 "GET /score2/calculate-all/ HTTP/1.1" 405 0
+INFO 2025-07-25 15:00:23,214 basehttp 94 126305330071232 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 15:00:23,719 basehttp 94 126305330071232 "GET /patients/ HTTP/1.1" 200 87182
+WARNING 2025-07-25 15:00:24,505 log 94 126305330071232 Method Not Allowed (GET): /score2/calculate-all/
+WARNING 2025-07-25 15:00:24,516 basehttp 94 126305330071232 "GET /score2/calculate-all/ HTTP/1.1" 405 0
+WARNING 2025-07-25 15:00:25,967 log 94 126305330071232 Method Not Allowed (GET): /score2/calculate-all/
+WARNING 2025-07-25 15:00:25,981 basehttp 94 126305330071232 "GET /score2/calculate-all/ HTTP/1.1" 405 0
+INFO 2025-07-25 15:03:16,568 basehttp 94 126305330071232 "GET /patients/3638/ HTTP/1.1" 200 25520
+INFO 2025-07-25 15:03:35,541 basehttp 94 126305330071232 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 15:03:42,263 basehttp 94 126305330071232 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=calculated HTTP/1.1" 200 85866
+INFO 2025-07-25 15:03:55,237 basehttp 94 126305330071232 "GET /patients/2300/ HTTP/1.1" 200 35196
+INFO 2025-07-25 15:05:51,925 basehttp 94 126305330071232 "GET /patients/2315/ HTTP/1.1" 200 34748
+INFO 2025-07-25 15:07:29,103 basehttp 94 126305330071232 "GET /patients/ HTTP/1.1" 200 87182
+INFO 2025-07-25 15:07:38,084 basehttp 94 126305330071232 "GET /patients/?search=&risk_level=very_high&age=score_eligible&score_status= HTTP/1.1" 200 85608
+INFO 2025-07-25 15:08:22,404 basehttp 94 126305330071232 "GET /patients/import/ HTTP/1.1" 200 30551
+INFO 2025-07-25 15:09:50,719 autoreload 94 126306019957632 /app/patients/views.py changed, reloading.
+INFO 2025-07-25 15:09:51,249 autoreload 120 134082583219072 Watching for file changes with StatReloader
+INFO 2025-07-25 15:12:05,501 basehttp 120 134081893279424 "GET /patients/ HTTP/1.1" 200 87862
+INFO 2025-07-25 15:12:12,805 basehttp 120 134081893279424 "GET /patients/?search=&risk_level=all&age=score_eligible&score_status=calculated HTTP/1.1" 200 88086
+INFO 2025-07-25 15:12:15,805 basehttp 120 134081893279424 "GET /patients/2300/ HTTP/1.1" 200 41793
+INFO 2025-07-25 15:12:51,359 basehttp 120 134081893279424 "POST /patients/2300/ HTTP/1.1" 200 42939
+INFO 2025-07-25 15:13:06,990 basehttp 120 134081893279424 "POST /score2/calculate/2300/ HTTP/1.1" 200 258
+INFO 2025-07-25 15:13:08,041 basehttp 120 134081893279424 "POST /patients/2300/ HTTP/1.1" 200 42939
+INFO 2025-07-25 15:13:09,904 basehttp 120 134081893279424 "GET /patients/ HTTP/1.1" 200 87862
+WARNING 2025-07-25 15:13:11,911 log 120 134081893279424 Method Not Allowed (GET): /score2/calculate-all/
+WARNING 2025-07-25 15:13:11,921 basehttp 120 134081893279424 "GET /score2/calculate-all/ HTTP/1.1" 405 0
+INFO 2025-07-25 15:13:17,322 basehttp 120 134081893279424 "GET /patients/3636/ HTTP/1.1" 200 31681

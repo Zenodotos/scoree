@@ -106,18 +106,6 @@ class Patient(models.Model):
         else:
             return self.smoking_status, 'patient_setting'
         
-    def clean(self):
-        if self.patient_id and self.visit_date:
-            existing = Visit.objects.filter(
-                patient=self.patient,
-                visit_date=self.visit_date
-            ).exclude(pk=self.pk)
-            if existing.exists():
-                raise ValidationError('Wizyta w tym dniu już istnieje dla tego pacjenta.')
-    
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
 
 
 
@@ -175,7 +163,17 @@ class Visit(models.Model):
             return f"{self.visit_date.year}H{q}"
         return None
     
+    def clean(self):
+        if self.patient and self.visit_date:
+            existing = Visit.objects.filter(
+                patient=self.patient,
+                visit_date=self.visit_date
+            ).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError('Wizyta w tym dniu już istnieje dla tego pacjenta.')
+    
     def save(self, *args, **kwargs):
+        self.clean()
         if self.visit_date and not self.quarter:
             self.quarter = self.get_quarter()
         super().save(*args, **kwargs)
