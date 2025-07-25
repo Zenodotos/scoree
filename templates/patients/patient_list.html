@@ -1,0 +1,475 @@
+{% extends 'base.html' %}
+
+{% block title %}Lista pacjentów - System SCORE2{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="py-6">
+            <div class="md:flex md:items-center md:justify-between">
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                        <svg class="w-8 h-8 inline-block mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                        Lista pacjentów
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Zarządzaj pacjentami i obliczaj ryzyko sercowo-naczyniowe
+                    </p>
+                </div>
+                <div class="mt-4 flex md:mt-0 md:ml-4">
+                    <button type="button" onclick="calculateAllScores()" 
+                            class="btn-success mr-3" id="calculate-all-btn">
+                        <svg class="w-4 h-4 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16a2 2 0 002 2z"></path>
+                        </svg>
+                        Oblicz SCORE2 dla wszystkich
+                    </button>
+                    <a href="{% url 'patients:import_data' %}" class="btn-primary">
+                        <svg class="w-4 h-4 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        Import danych
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Statistics cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="card p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="ml-4">
+                <div class="text-sm font-medium text-gray-500">Wszyscy pacjenci</div>
+                <div class="text-2xl font-bold text-gray-900">{{ total_patients }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="ml-4">
+                <div class="text-sm font-medium text-gray-500">Z wizytami</div>
+                <div class="text-2xl font-bold text-gray-900">{{ patients_with_visits }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="ml-4">
+                <div class="text-sm font-medium text-gray-500">Z SCORE2</div>
+                <div class="text-2xl font-bold text-gray-900">{{ patients_with_scores }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-8 h-8 bg-red-100 rounded-md flex items-center justify-center">
+                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="ml-4">
+                <div class="text-sm font-medium text-gray-500">Z cukrzycą</div>
+                <div class="text-2xl font-bold text-gray-900">{{ diabetic_patients }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-6">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">Filtry</h3>
+    </div>
+    <div class="p-6">
+        <form method="get" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Search -->
+                <div>
+                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Szukaj</label>
+                    <input type="text" name="search" id="search" value="{{ search_query }}"
+                           placeholder="PESEL lub imię i nazwisko"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Diabetes filter -->
+                <div>
+                    <label for="diabetes" class="block text-sm font-medium text-gray-700 mb-1">Cukrzyca</label>
+                    <select name="diabetes" id="diabetes" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Wszystkie</option>
+                        <option value="yes" {% if diabetes_filter == 'yes' %}selected{% endif %}>Z cukrzycą</option>
+                        <option value="no" {% if diabetes_filter == 'no' %}selected{% endif %}>Bez cukrzycy</option>
+                    </select>
+                </div>
+
+                <!-- Age filter -->
+                <div>
+                    <label for="age" class="block text-sm font-medium text-gray-700 mb-1">Grupa wiekowa</label>
+                    <select name="age" id="age" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Wszystkie</option>
+                        <option value="40-49" {% if age_filter == '40-49' %}selected{% endif %}>40-49 lat</option>
+                        <option value="50-59" {% if age_filter == '50-59' %}selected{% endif %}>50-59 lat</option>
+                        <option value="60-69" {% if age_filter == '60-69' %}selected{% endif %}>60-69 lat</option>
+                        <option value="70+" {% if age_filter == '70+' %}selected{% endif %}>70+ lat</option>
+                    </select>
+                </div>
+
+                <!-- SCORE2 status filter -->
+                <div>
+                    <label for="score_status" class="block text-sm font-medium text-gray-700 mb-1">Status SCORE2</label>
+                    <select name="score_status" id="score_status" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Wszystkie</option>
+                        <option value="calculated" {% if score_filter == 'calculated' %}selected{% endif %}>Obliczone</option>
+                        <option value="not_calculated" {% if score_filter == 'not_calculated' %}selected{% endif %}>Nieobliczone</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <a href="{% url 'patients:patient_list' %}" class="btn-secondary">Wyczyść filtry</a>
+                <button type="submit" class="btn-primary">Filtruj</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Patients table -->
+<div class="card">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">
+            Pacjenci 
+            <span class="text-sm font-normal text-gray-500">({{ page_obj.paginator.count }} znalezionych)</span>
+        </h3>
+    </div>
+    
+    {% if patients %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Pacjent
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Wiek
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Cukrzyca
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Wizyty
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            SCORE2
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Akcje
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for patient in patients %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <div class="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                            <span class="text-sm font-medium text-gray-700">
+                                                {{ patient.full_name|default:patient.pesel|slice:":2"|upper }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ patient.full_name|default:"Brak nazwiska" }}
+                                        </div>
+                                        <div class="text-sm text-gray-500">
+                                            PESEL: {{ patient.pesel }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ patient.age }} lat
+                                <div class="text-xs text-gray-500">
+                                    {% if patient.gender == 'M' %}Mężczyzna{% else %}Kobieta{% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if patient.has_diabetes %}
+                                    <span class="badge-danger">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        Tak
+                                    </span>
+                                {% else %}
+                                    <span class="badge-secondary">Nie</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ patient.visits_count }}
+                                {% if patient.get_latest_visit %}
+                                    <div class="text-xs text-gray-500">
+                                        Ostatnia: {{ patient.get_latest_visit.visit_date }}
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if patient.score2_count > 0 %}
+                                    <span class="badge-success">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                        </svg>
+                                        {{ patient.score2_count }} wynik{{ patient.score2_count|pluralize:"i,ów" }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge-warning">Brak obliczeń</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex space-x-2">
+                                    <a href="{% url 'patients:patient_detail' patient.pk %}" 
+                                       class="text-blue-600 hover:text-blue-900 text-sm">
+                                        Szczegóły
+                                    </a>
+                                    {% if patient.get_latest_visit %}
+                                        <button onclick="calculateScore({{ patient.pk }})" 
+                                                class="text-green-600 hover:text-green-900 text-sm calculate-btn"
+                                                data-patient-id="{{ patient.pk }}">
+                                            Oblicz SCORE2
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+            <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div class="flex-1 flex justify-between sm:hidden">
+                    {% if page_obj.has_previous %}
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" 
+                           class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                            Poprzednia
+                        </a>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" 
+                           class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                            Następna
+                        </a>
+                    {% endif %}
+                </div>
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            Pokazano <span class="font-medium">{{ page_obj.start_index }}</span> do <span class="font-medium">{{ page_obj.end_index }}</span>
+                            z <span class="font-medium">{{ page_obj.paginator.count }}</span> wyników
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                            {% if page_obj.has_previous %}
+                                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </a>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-blue-50 text-sm font-medium text-blue-600">
+                                        {{ num }}
+                                    </span>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}" 
+                                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                        {{ num }}
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </a>
+                            {% endif %}
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Brak pacjentów</h3>
+            <p class="mt-1 text-sm text-gray-500">Nie znaleziono pacjentów spełniających kryteria wyszukiwania.</p>
+            <div class="mt-6">
+                <a href="{% url 'patients:import_data' %}" class="btn-primary">
+                    <svg class="w-4 h-4 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    Importuj dane pacjentów
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Calculate SCORE2 for single patient
+    function calculateScore(patientId) {
+        const btn = document.querySelector(`[data-patient-id="${patientId}"]`);
+        const originalText = btn.textContent;
+        btn.textContent = 'Obliczam...';
+        btn.disabled = true;
+
+        fetch(`{% url 'score2:calculate_single' 0 %}`.replace('0', patientId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show success message
+                showMessage('success', `SCORE2 obliczone pomyślnie: ${data.result.score_type} = ${data.result.score_value || 'Brak wyniku'}`);
+                // Reload page to show updated data
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showMessage('error', `Błąd: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            showMessage('error', `Błąd połączenia: ${error.message}`);
+        })
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    // Calculate SCORE2 for all patients
+    function calculateAllScores() {
+        const btn = document.getElementById('calculate-all-btn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Obliczam dla wszystkich...';
+        btn.disabled = true;
+
+        fetch('{% url "score2:calculate_all" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const results = data.results;
+                showMessage('success', 
+                    `Obliczenia zakończone! Przetworzono: ${results.total_processed}, ` +
+                    `Udane: ${results.successful_calculations}, ` +
+                    `Nieudane: ${results.failed_calculations}, ` +
+                    `Wykluczone: ${results.excluded_patients}`
+                );
+                // Reload page to show updated data
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showMessage('error', `Błąd: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            showMessage('error', `Błąd połączenia: ${error.message}`);
+        })
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    // Show message function
+    function showMessage(type, message) {
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+        const iconPath = type === 'success' ? 
+            'M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' :
+            'M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z';
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `${alertClass} mb-4`;
+        messageDiv.innerHTML = `
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 ${type === 'success' ? 'text-green-400' : 'text-red-400'}" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="${iconPath}" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm">${message}</p>
+                </div>
+            </div>
+        `;
+
+        // Insert message at the top of content
+        const content = document.querySelector('.max-w-7xl.mx-auto.px-4.sm\\:px-6.lg\\:px-8.py-6');
+        content.insertBefore(messageDiv, content.firstChild);
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            messageDiv.style.transition = 'opacity 0.5s';
+            messageDiv.style.opacity = '0';
+            setTimeout(() => messageDiv.remove(), 500);
+        }, 5000);
+    }
+</script>
+{% endblock %}
