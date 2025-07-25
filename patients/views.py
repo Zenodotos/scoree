@@ -1,12 +1,13 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.db.models import Q, Count, Prefetch
+from django.db.models import Q, Count, Prefetch, Max
 from django.views.generic import ListView, DetailView
 from django.views import View
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 import pandas as pd
@@ -16,6 +17,7 @@ import re
 import pathlib
 
 from .models import Patient, Visit, PatientDiagnosis, VisitDiagnosis, Diagnosis
+from .forms import VisitForm, PatientSmokingForm
 from score2.models import Score2Result
 
 
@@ -28,11 +30,54 @@ class PatientListView(ListView):
     def get_queryset(self):
         queryset = Patient.objects.select_related().prefetch_related(
             'visits',
-            'score2_results'
+            Prefetch('score2_results', 
+                    queryset=Score2Result.objects.order_by('-created_at')),
         ).annotate(
             visits_count=Count('visits'),
-            score2_count=Count('score2_results')
+            score2_count=Count('score2_results'),
+            latest_score=Max('score2_results__score_value')
         )
+        
+        # Domyślnie tylko pacjenci w wieku 40-89 lat (kwalifikowalni do SCORE2)
+        age_filter = self.request.GET.get('age', 'score_eligible')
+        if age_filter == 'score_eligible':
+            today = date.today()
+            min_date = today - relativedelta(years=90)  # max 89 lat
+            max_date = today - relativedelta(years=40)  # min 40 lat
+            queryset = queryset.filter(
+                date_of_birth__gt=min_date,
+                date_of_birth__lte=max_date
+            )
+        elif age_filter == 'all':
+            pass  # Pokaż wszystkich
+        elif age_filter == '40-49':
+            today = date.today()
+            start_date = today - relativedelta(years=50)
+            end_date = today - relativedelta(years=40)
+            queryset = queryset.filter(
+                date_of_birth__gt=start_date,
+                date_of_birth__lte=end_date
+            )
+        elif age_filter == '50-59':
+            today = date.today()
+            start_date = today - relativedelta(years=60)
+            end_date = today - relativedelta(years=50)
+            queryset = queryset.filter(
+                date_of_birth__gt=start_date,
+                date_of_birth__lte=end_date
+            )
+        elif age_filter == '60-69':
+            today = date.today()
+            start_date = today - relativedelta(years=70)
+            end_date = today - relativedelta(years=60)
+            queryset = queryset.filter(
+                date_of_birth__gt=start_date,
+                date_of_birth__lte=end_date
+            )
+        elif age_filter == '70+':
+            today = date.today()
+            end_date = today - relativedelta(years=70)
+            queryset = queryset.filter(date_of_birth__lte=end_date)
         
         # Search functionality
         search_query = self.request.GET.get('search')
@@ -46,8 +91,6 @@ class PatientListView(ListView):
         diabetes_filter = self.request.GET.get('diabetes')
         if diabetes_filter in ('yes', 'no'):
             diabetes_codes = ['E10', 'E11', 'E13', 'E14']
-
-            # Build Q() objects for each diabetes code
             diabetes_q = Q()
             for code in diabetes_codes:
                 diabetes_q |= Q(chronic_diagnoses__diagnosis_code__startswith=code)
@@ -58,66 +101,61 @@ class PatientListView(ListView):
             else:  # 'no'
                 queryset = queryset.exclude(diabetes_q)
         
-        # Filter by age range
-        age_filter = self.request.GET.get('age')
-        if age_filter:
-            today = date.today()
-            if age_filter == '40-49':
-                start_date = today - relativedelta(years=50)
-                end_date = today - relativedelta(years=40)
-            elif age_filter == '50-59':
-                start_date = today - relativedelta(years=60)
-                end_date = today - relativedelta(years=50)
-            elif age_filter == '60-69':
-                start_date = today - relativedelta(years=70)
-                end_date = today - relativedelta(years=60)
-            elif age_filter == '70+':
-                start_date = date(1900, 1, 1)
-                end_date = today - relativedelta(years=70)
-            else:
-                start_date = None
-                end_date = None
-            
-            if start_date and end_date:
-                queryset = queryset.filter(
-                    date_of_birth__gte=start_date,
-                    date_of_birth__lt=end_date
-                )
-        
         # Filter by SCORE2 calculation status
         score_filter = self.request.GET.get('score_status')
         if score_filter == 'calculated':
-            queryset = queryset.filter(score2_results__isnull=False).distinct()
+            queryset = queryset.filter(
+                score2_results__is_calculation_successful=True
+            ).distinct()
         elif score_filter == 'not_calculated':
-            queryset = queryset.filter(score2_results__isnull=True)
+            queryset = queryset.filter(
+                Q(score2_results__isnull=True) |
+                Q(score2_results__is_calculation_successful=False)
+            ).distinct()
         
-        return queryset.order_by('-updated_at')
+        # Sortowanie: od największego score do najmniejszego, potem najnowsze
+        return queryset.order_by('-latest_score', '-updated_at')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
         # Add summary statistics
-        total_patients = Patient.objects.count()
-        patients_with_visits = Patient.objects.filter(visits__isnull=False).distinct().count()
-        patients_with_scores = Patient.objects.filter(score2_results__isnull=False).distinct().count()
+        all_patients = Patient.objects.all()
+        total_patients = all_patients.count()
         
-        # Diabetes statistics - FIXED
+        # Eligible patients (40-89 years)
+        today = date.today()
+        min_date = today - relativedelta(years=90)
+        max_date = today - relativedelta(years=40)
+        eligible_patients = all_patients.filter(
+            date_of_birth__gt=min_date,
+            date_of_birth__lte=max_date
+        )
+        eligible_count = eligible_patients.count()
+        
+        patients_with_visits = eligible_patients.filter(visits__isnull=False).distinct().count()
+        patients_with_scores = eligible_patients.filter(
+            score2_results__is_calculation_successful=True
+        ).distinct().count()
+        
+        # Diabetes statistics
         diabetes_codes = ['E10', 'E11', 'E13', 'E14']
         diabetes_q = Q()
         for code in diabetes_codes:
             diabetes_q |= Q(chronic_diagnoses__diagnosis_code__startswith=code)
             diabetes_q |= Q(visits__diagnoses__diagnosis_code__startswith=code)
             
-        diabetic_patients = Patient.objects.filter(diabetes_q).distinct().count()
+        diabetic_patients = eligible_patients.filter(diabetes_q).distinct().count()
         
         context.update({
             'total_patients': total_patients,
+            'eligible_patients': eligible_count,
             'patients_with_visits': patients_with_visits,
             'patients_with_scores': patients_with_scores,
             'diabetic_patients': diabetic_patients,
             'search_query': self.request.GET.get('search', ''),
             'diabetes_filter': self.request.GET.get('diabetes', ''),
-            'age_filter': self.request.GET.get('age', ''),
+            'age_filter': self.request.GET.get('age', 'score_eligible'),
             'score_filter': self.request.GET.get('score_status', ''),
         })
         
@@ -142,6 +180,84 @@ class PatientDetailView(DetailView):
             pk=self.kwargs['pk']
         )
     
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        
+        # Update visit
+        if 'update_visit' in request.POST:
+            visit_id = request.POST.get('visit_id')
+            visit = get_object_or_404(Visit, id=visit_id, patient=self.object)
+            form = VisitForm(request.POST, instance=visit)
+            if form.is_valid():
+                try:
+                    form.save()
+                    messages.success(request, 'Wizyta została zaktualizowana.')
+                    
+                    # Usuń stary wynik SCORE2 dla tej wizyty
+                    Score2Result.objects.filter(patient=self.object, visit=visit).delete()
+                    
+                    return redirect('patients:patient_detail', pk=self.object.pk)
+                except ValidationError as e:
+                    messages.error(request, f'Błąd: {e.message}')
+            else:
+                messages.error(request, 'Błąd walidacji formularza.')
+        
+        # Update smoking status
+        elif 'update_smoking' in request.POST:
+            form = PatientSmokingForm(request.POST, instance=self.object)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Status palenia został zaktualizowany.')
+                
+                # Usuń wszystkie wyniki SCORE2 - będą przeliczone z nowym statusem palenia
+                Score2Result.objects.filter(patient=self.object).delete()
+                
+                return redirect('patients:patient_detail', pk=self.object.pk)
+        
+        # Recalculate SCORE2
+        elif 'recalculate_score' in request.POST:
+            from score2.views import CalculateScore2View
+            calculator = CalculateScore2View()
+            latest_visit = self.object.get_latest_visit()
+            
+            if not latest_visit:
+                messages.error(request, 'Brak wizyt dla tego pacjenta.')
+                return redirect('patients:patient_detail', pk=self.object.pk)
+            
+            try:
+                result = calculator._calculate_score_for_visit(self.object, latest_visit)
+                if result.is_calculation_successful:
+                    messages.success(
+                        request, 
+                        f'SCORE2 obliczone pomyślnie: {result.score_type} = {result.score_value}%'
+                    )
+                else:
+                    messages.warning(
+                        request, 
+                        f'Nie można obliczyć SCORE2: {result.missing_data_reason}'
+                    )
+            except Exception as e:
+                messages.error(request, f'Błąd podczas obliczania: {str(e)}')
+            
+            return redirect('patients:patient_detail', pk=self.object.pk)
+        
+        # Add new visit
+        elif 'add_visit' in request.POST:
+            form = VisitForm(request.POST)
+            if form.is_valid():
+                try:
+                    visit = form.save(commit=False)
+                    visit.patient = self.object
+                    visit.save()
+                    messages.success(request, 'Nowa wizyta została dodana.')
+                    return redirect('patients:patient_detail', pk=self.object.pk)
+                except ValidationError as e:
+                    messages.error(request, f'Błąd: {e.message}')
+            else:
+                messages.error(request, 'Błąd walidacji formularza.')
+        
+        return self.get(request, *args, **kwargs)
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         patient = self.object
@@ -153,19 +269,17 @@ class PatientDetailView(DetailView):
         score_results = {}
         for result in patient.score2_results.all():
             visit_id = result.visit.id
-            if visit_id not in score_results:
-                score_results[visit_id] = []
-            score_results[visit_id].append(result)
+            score_results[visit_id] = result  # Tylko jeden wynik na wizytę
         
         # Prepare visit data with score results
         visit_data = []
         for visit in visits:
-            visit_scores = score_results.get(visit.id, [])
+            score_result = score_results.get(visit.id)
             visit_data.append({
                 'visit': visit,
-                'scores': visit_scores,
-                'has_score': bool(visit_scores),
-                'age': patient.calculate_age(visit.visit_date),   # ← add this
+                'score': score_result,
+                'has_score': score_result is not None,
+                'age': patient.calculate_age(visit.visit_date),
             })
         
         # Get smoking status
@@ -217,6 +331,15 @@ class PatientDetailView(DetailView):
             elif age > 89:
                 missing_data.append('Wiek powyżej 89 lat (maksimum dla SCORE2-OP)')
         
+        # Forms
+        visit_form = VisitForm()
+        smoking_form = PatientSmokingForm(instance=patient)
+        
+        # Edit forms for each visit
+        edit_forms = {}
+        for visit in visits:
+            edit_forms[visit.id] = VisitForm(instance=visit)
+        
         context.update({
             'visit_data': visit_data,
             'smoking_status': smoking_status,
@@ -226,6 +349,9 @@ class PatientDetailView(DetailView):
             'latest_visit': latest_visit,
             'possible_scores': possible_scores,
             'missing_data': missing_data,
+            'visit_form': visit_form,
+            'smoking_form': smoking_form,
+            'edit_forms': edit_forms,
         })
         
         return context
@@ -404,8 +530,6 @@ class ImportDataView(View):
         results = {'visits': 0, 'diagnoses': 0}
         
         # Create visit if visit_date exists and visit doesn't exist yet
-
-
         if first_row.visit_date:
             # build defaults dict, skipping any NaN/None
             raw = first_row  # your pandas Series

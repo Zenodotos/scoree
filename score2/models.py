@@ -13,6 +13,12 @@ class Score2Result(models.Model):
         ('SCORE2-Diabetes', 'SCORE2-Diabetes'),
         ('SCORE2-OP', 'SCORE2-OP'),
     ]
+    DATA_SOURCE_CHOICES = [
+        ('visit', 'Dane z wizyty'),
+        ('previous_visit', 'Dane z poprzednich wizyt'),
+        ('median', 'Mediana dla grupy wiekowej'),
+        ('mixed', 'Dane mieszane'),
+    ]
     
     RISK_LEVEL_CHOICES = [
         ('low_to_moderate', 'Niskie do umiarkowanego'),
@@ -61,14 +67,18 @@ class Score2Result(models.Model):
     calculation_notes = models.TextField(blank=True, null=True)
     is_calculation_successful = models.BooleanField(default=False)
     missing_data_reason = models.TextField(blank=True, null=True)
-    
+    data_source = models.CharField(
+        max_length=20, 
+        choices=DATA_SOURCE_CHOICES,
+        default='visit'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'score2_results'
-        ordering = ['-created_at']
-        unique_together = ['patient', 'visit', 'created_at']
+        ordering = ['-score_value', '-created_at'] 
+        unique_together = ['patient', 'visit']  
     
     def __str__(self):
         score_display = f"{self.score_value}%" if self.score_value else "Brak wyniku"

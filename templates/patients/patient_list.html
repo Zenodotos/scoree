@@ -179,106 +179,64 @@
     {% if patients %}
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pacjent</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wiek</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SCORE2</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Grupa ryzyka</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontakt</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Źródło danych</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for patient in patients %}
                     <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Pacjent
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Wiek
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Cukrzyca
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Wizyty
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            SCORE2
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Akcje
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for patient in patients %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <div class="flex-shrink-0 h-10 w-10">
-                                        <div class="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                            <span class="text-sm font-medium text-gray-700">
-                                                {{ patient.full_name|default:patient.pesel|slice:":2"|upper }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="ml-4">
-                                        <div class="text-sm font-medium text-gray-900">
-                                            {{ patient.full_name|default:"Brak nazwiska" }}
-                                        </div>
-                                        <div class="text-sm text-gray-500">
-                                            PESEL: {{ patient.pesel }}
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ patient.age }} lat
-                                <div class="text-xs text-gray-500">
-                                    {% if patient.gender == 'M' %}Mężczyzna{% else %}Kobieta{% endif %}
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                {% if patient.has_diabetes %}
-                                    <span class="badge-danger">
-                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                        </svg>
-                                        Tak
-                                    </span>
-                                {% else %}
-                                    <span class="badge-secondary">Nie</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ patient.visits_count }}
-                                {% if patient.get_latest_visit %}
-                                    <div class="text-xs text-gray-500">
-                                        Ostatnia: {{ patient.get_latest_visit.visit_date }}
-                                    </div>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                {% if patient.score2_count > 0 %}
-                                    <span class="badge-success">
-                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                                        </svg>
-                                        {{ patient.score2_count }} wynik{{ patient.score2_count|pluralize:"i,ów" }}
-                                    </span>
-                                {% else %}
-                                    <span class="badge-warning">Brak obliczeń</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div class="flex space-x-2">
-                                    <a href="{% url 'patients:patient_detail' patient.pk %}" 
-                                       class="text-blue-600 hover:text-blue-900 text-sm">
-                                        Szczegóły
-                                    </a>
-                                    {% if patient.get_latest_visit %}
-                                        <button onclick="calculateScore({{ patient.pk }})" 
-                                                class="text-green-600 hover:text-green-900 text-sm calculate-btn"
-                                                data-patient-id="{{ patient.pk }}">
-                                            Oblicz SCORE2
-                                        </button>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-gray-900">
+                                {{ patient.full_name|default:"Brak nazwiska" }}
+                            </div>
+                            <div class="text-sm text-gray-500">{{ patient.pesel }}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-900">{{ patient.age }} lat</td>
+                        <td class="px-6 py-4">
+                            {% with latest_score=patient.score2_results.first %}
+                                {% if latest_score %}
+                                    <div class="text-sm font-medium">{{ latest_score.score_type }}</div>
+                                    {% if latest_score.is_calculation_successful %}
+                                        <div class="text-lg font-bold text-blue-600">{{ latest_score.score_value }}%</div>
+                                    {% else %}
+                                        <span class="badge-warning">Nieobliczone</span>
                                     {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
+                                {% else %}
+                                    <span class="badge-secondary">Brak</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% with latest_score=patient.score2_results.first %}
+                                {% if latest_score.is_calculation_successful %}
+                                    {% if latest_score.risk_level == 'low_to_moderate' %}
+                                        <span class="badge-success">{{ latest_score.risk_level_display }}</span>
+                                    {% elif latest_score.risk_level == 'high' %}
+                                        <span class="badge-warning">{{ latest_score.risk_level_display }}</span>
+                                    {% elif latest_score.risk_level == 'very_high' %}
+                                        <span class="badge-danger">{{ latest_score.risk_level_display }}</span>
+                                    {% endif %}
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-900">
+                            {{ patient.phone_mobile|default:patient.phone_landline|default:"—" }}
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-500">
+                            {% with latest_score=patient.score2_results.first %}
+                                {% if latest_score %}{{ latest_score.get_data_source_display }}{% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
             </table>
         </div>
 

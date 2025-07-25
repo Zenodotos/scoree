@@ -3,11 +3,18 @@ from django.core.validators import RegexValidator
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from django.db.models import Q 
+from django.core.exceptions import ValidationError
 
 class Patient(models.Model):
     GENDER_CHOICES = [
         ('M', 'Mężczyzna'),
         ('F', 'Kobieta'),
+    ]
+
+    SMOKING_CHOICES = [
+        ('non_smoker', 'Nie pali'),
+        ('smoker', 'Pali'),
+        ('assumed_non_smoker', 'Zakładany niepali (brak danych)'),
     ]
     
     pesel = models.CharField(
@@ -23,6 +30,11 @@ class Patient(models.Model):
     phone_landline = models.CharField(max_length=20, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    smoking_status = models.CharField(
+        max_length=20, 
+        choices=SMOKING_CHOICES, 
+        default='assumed_non_smoker'
+    )
     
     class Meta:
         db_table = 'patients'
@@ -38,7 +50,7 @@ class Patient(models.Model):
         return reference_date.year - self.date_of_birth.year - (
             (reference_date.month, reference_date.day) < (self.date_of_birth.month, self.date_of_birth.day)
         )
-    
+
     @property
     def age(self):
         return self.calculate_age()
@@ -77,15 +89,11 @@ class Patient(models.Model):
         return None
     
     def get_smoking_status(self):
-        """Determine smoking status based on diagnosis codes"""
-        # Check all diagnoses for smoking-related codes
+        """Determine smoking status - updated to use model field"""
+        # Check diagnoses first
         all_diagnoses = set()
-        
-        # Add chronic diagnoses
         chronic = self.chronic_diagnoses.values_list('diagnosis_code', flat=True)
         all_diagnoses.update(chronic)
-        
-        # Add visit diagnoses
         visit_dx = VisitDiagnosis.objects.filter(
             visit__patient=self
         ).values_list('diagnosis_code', flat=True)
@@ -93,12 +101,24 @@ class Patient(models.Model):
         
         if 'F17.2' in all_diagnoses:
             return 'smoker', 'diagnosis_F17.2'
-        elif 'Z87.7' in all_diagnoses:
-            return 'non_smoker', 'diagnosis_Z87.7'
-        elif 'Z58.7' in all_diagnoses:
-            return 'non_smoker', 'diagnosis_Z58.7'
+        elif 'Z87.7' in all_diagnoses or 'Z58.7' in all_diagnoses:
+            return 'non_smoker', f'diagnosis_{list(all_diagnoses)[0]}'
         else:
-            return 'non_smoker', 'assumed_non_smoker'
+            return self.smoking_status, 'patient_setting'
+        
+    def clean(self):
+        if self.patient_id and self.visit_date:
+            existing = Visit.objects.filter(
+                patient=self.patient,
+                visit_date=self.visit_date
+            ).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError('Wizyta w tym dniu już istnieje dla tego pacjenta.')
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
 
 
 class Diagnosis(models.Model):

@@ -37,6 +37,7 @@ class CalculateScore2View(View):
                     'is_successful': result.is_calculation_successful,
                     'missing_data': result.missing_data_reason,
                     'notes': result.calculation_notes,
+                    'data_source': result.get_data_source_display(),
                 }
             })
         except Exception as e:
@@ -45,72 +46,19 @@ class CalculateScore2View(View):
                 'error': str(e)
             })
 
-
-class CalculateAllScore2View(View):
-    """Calculate SCORE2 for all patients"""
-    
-    def post(self, request):
-        try:
-            results = self._calculate_scores_for_all()
-            return JsonResponse({
-                'success': True,
-                'results': results
-            })
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            })
-    
-    def _calculate_scores_for_all(self):
-        """Calculate scores for all eligible patients"""
-        # Get all patients with visits
-        patients = Patient.objects.filter(visits__isnull=False).distinct()
-        
-        total_processed = 0
-        successful_calculations = 0
-        failed_calculations = 0
-        excluded_patients = 0
-        
-        with transaction.atomic():
-            for patient in patients:
-                latest_visit = patient.get_latest_visit()
-                if not latest_visit:
-                    continue
-                
-                try:
-                    result = self._calculate_score_for_visit(patient, latest_visit)
-                    total_processed += 1
-                    
-                    if result.is_calculation_successful:
-                        successful_calculations += 1
-                    else:
-                        if result.missing_data_reason:
-                            failed_calculations += 1
-                        else:
-                            excluded_patients += 1
-                            
-                except Exception as e:
-                    print(f"Error processing patient {patient.pesel}: {str(e)}")
-                    failed_calculations += 1
-                    continue
-        
-        return {
-            'total_processed': total_processed,
-            'successful_calculations': successful_calculations,
-            'failed_calculations': failed_calculations,
-            'excluded_patients': excluded_patients,
-        }
-    
     def _calculate_score_for_visit(self, patient: Patient, visit: Visit) -> Score2Result:
-        """Calculate appropriate SCORE2 for a patient's visit"""
+        """Calculate appropriate SCORE2 for a patient's visit - ONE result per visit"""
+        
+        # Remove existing result for this visit
+        Score2Result.objects.filter(patient=patient, visit=visit).delete()
+        
         age = patient.calculate_age(visit.visit_date)
         has_diabetes = patient.has_diabetes()
         smoking_status, smoking_info = patient.get_smoking_status()
         smoker = smoking_status == 'smoker'
         
         # Get cholesterol values with fallback logic
-        total_chol, hdl_chol, chol_info = self._get_cholesterol_values(patient, visit.visit_date)
+        total_chol, hdl_chol, chol_info, chol_source = self._get_cholesterol_values(patient, visit.visit_date)
         
         # Base result object
         result_data = {
@@ -135,9 +83,10 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': 'Brak ciśnienia skurczowego',
-                'calculation_notes': 'Nie można obliczyć bez ciśnienia skurczowego'
+                'calculation_notes': 'Nie można obliczyć bez ciśnienia skurczowego',
+                'data_source': 'visit'
             })
-            return self._create_or_update_result(**result_data)
+            return Score2Result.objects.create(**result_data)
         
         # Determine which score to calculate
         if has_diabetes and 40 <= age <= 69:
@@ -158,12 +107,13 @@ class CalculateAllScore2View(View):
             result_data.update({
                 'score_type': '',
                 'score_value': None,
-                'risk_level': 'not_applicable',
+                'risk_level': 'age_out_of_range',
                 'is_calculation_successful': False,
                 'missing_data_reason': exclusion_reason,
-                'calculation_notes': f'Pacjent wykluczony: {exclusion_reason}'
+                'calculation_notes': f'Pacjent wykluczony: {exclusion_reason}',
+                'data_source': 'visit'
             })
-            return self._create_or_update_result(**result_data)
+            return Score2Result.objects.create(**result_data)
     
     def _calculate_score2(self, result_data: dict) -> Score2Result:
         """Calculate SCORE2 for non-diabetic patients aged 40-69"""
@@ -188,9 +138,10 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': f'Brak danych: {", ".join(missing)}',
-                'calculation_notes': f'SCORE2: Brakuje {", ".join(missing)}'
+                'calculation_notes': f'SCORE2: Brakuje {", ".join(missing)}',
+                'data_source': 'visit'
             })
-            return self._create_or_update_result(**result_data)
+            return Score2Result.objects.create(**result_data)
         
         try:
             smoker = smoking_status == 'smoker'
@@ -212,7 +163,8 @@ class CalculateAllScore2View(View):
                 'risk_level': risk_level,
                 'is_calculation_successful': True,
                 'missing_data_reason': None,
-                'calculation_notes': f'SCORE2: sbp={sbp}, tchol={total_chol:.1f}, hdl={hdl_chol:.1f}'
+                'calculation_notes': f'SCORE2: sbp={sbp}, tchol={total_chol:.1f}, hdl={hdl_chol:.1f}',
+                'data_source': result_data.get('data_source', 'visit')
             })
             
         except Exception as e:
@@ -222,10 +174,11 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': None,
-                'calculation_notes': f'Błąd obliczenia SCORE2: {str(e)}'
+                'calculation_notes': f'Błąd obliczenia SCORE2: {str(e)}',
+                'data_source': 'visit'
             })
         
-        return self._create_or_update_result(**result_data)
+        return Score2Result.objects.create(**result_data)
     
     def _calculate_score2_diabetes(self, result_data: dict) -> Score2Result:
         """Calculate SCORE2-Diabetes for diabetic patients aged 40-69"""
@@ -239,7 +192,7 @@ class CalculateAllScore2View(View):
         
         # Get diabetes-specific data
         age_at_diagnosis = patient.get_diabetes_age_at_diagnosis()
-        hba1c, egfr, lab_info = self._get_diabetes_lab_values(patient, visit.visit_date)
+        hba1c, egfr, lab_info, lab_source = self._get_diabetes_lab_values(patient, visit.visit_date)
         
         result_data.update({
             'age_at_diabetes_diagnosis': age_at_diagnosis,
@@ -266,9 +219,10 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': f'Brak danych: {", ".join(missing_items)}',
-                'calculation_notes': f'SCORE2-Diabetes: Brakuje {", ".join(missing_items)}'
+                'calculation_notes': f'SCORE2-Diabetes: Brakuje {", ".join(missing_items)}',
+                'data_source': 'mixed' if lab_source != 'visit' else 'visit'
             })
-            return self._create_or_update_result(**result_data)
+            return Score2Result.objects.create(**result_data)
         
         try:
             smoker = smoking_status == 'smoker'
@@ -297,7 +251,8 @@ class CalculateAllScore2View(View):
                 'calculation_notes': (
                     f'SCORE2-Diabetes: sbp={sbp}, tchol={total_chol:.1f}, hdl={hdl_chol:.1f}, '
                     f'egfr={egfr:.1f}, hba1c={hba1c:.1f}, wiek_dx={age_at_diagnosis}'
-                )
+                ),
+                'data_source': 'mixed' if lab_source != 'visit' else 'visit'
             })
             
         except Exception as e:
@@ -307,10 +262,11 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': None,
-                'calculation_notes': f'Błąd obliczenia SCORE2-Diabetes: {str(e)}'
+                'calculation_notes': f'Błąd obliczenia SCORE2-Diabetes: {str(e)}',
+                'data_source': 'mixed' if lab_source != 'visit' else 'visit'
             })
         
-        return self._create_or_update_result(**result_data)
+        return Score2Result.objects.create(**result_data)
     
     def _calculate_score2_op(self, result_data: dict) -> Score2Result:
         """Calculate SCORE2-OP for patients aged 70-89"""
@@ -336,9 +292,10 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': f'Brak danych: {", ".join(missing)}',
-                'calculation_notes': f'SCORE2-OP: Brakuje {", ".join(missing)}'
+                'calculation_notes': f'SCORE2-OP: Brakuje {", ".join(missing)}',
+                'data_source': 'visit'
             })
-            return self._create_or_update_result(**result_data)
+            return Score2Result.objects.create(**result_data)
         
         try:
             smoker = smoking_status == 'smoker'
@@ -364,7 +321,8 @@ class CalculateAllScore2View(View):
                 'calculation_notes': (
                     f'SCORE2-OP: sbp={sbp}, tchol={total_chol:.1f}, hdl={hdl_chol:.1f}, '
                     f'diabetes={has_diabetes}'
-                )
+                ),
+                'data_source': result_data.get('data_source', 'visit')
             })
             
         except Exception as e:
@@ -374,20 +332,22 @@ class CalculateAllScore2View(View):
                 'risk_level': 'not_applicable',
                 'is_calculation_successful': False,
                 'missing_data_reason': None,
-                'calculation_notes': f'Błąd obliczenia SCORE2-OP: {str(e)}'
+                'calculation_notes': f'Błąd obliczenia SCORE2-OP: {str(e)}',
+                'data_source': 'visit'
             })
         
-        return self._create_or_update_result(**result_data)
+        return Score2Result.objects.create(**result_data)
     
-    def _get_cholesterol_values(self, patient: Patient, visit_date: date) -> Tuple[Optional[float], Optional[float], str]:
-        """Get cholesterol values with fallback to previous visits and median"""
+    def _get_cholesterol_values(self, patient: Patient, visit_date: date) -> Tuple[Optional[float], Optional[float], str, str]:
+        """Get cholesterol values with fallback to previous visits and median - returns data source"""
         # First try current visit
         current_visit = patient.visits.filter(visit_date=visit_date).first()
         if current_visit and current_visit.cholesterol_total and current_visit.cholesterol_hdl:
             return (
                 float(current_visit.cholesterol_total),
                 float(current_visit.cholesterol_hdl),
-                "aktualna wizyta"
+                "aktualna wizyta",
+                'visit'
             )
         
         # Look for previous visits
@@ -402,13 +362,15 @@ class CalculateAllScore2View(View):
                 return (
                     float(visit.cholesterol_total),
                     float(visit.cholesterol_hdl),
-                    f"poprzednia wizyta ({visit.visit_date})"
+                    f"poprzednia wizyta ({visit.visit_date})",
+                    'previous_visit'
                 )
         
         # Try to complete partial data with median
         total_chol = None
         hdl_chol = None
         info_parts = []
+        data_source = 'visit'
         
         if current_visit:
             total_chol = float(current_visit.cholesterol_total) if current_visit.cholesterol_total else None
@@ -419,8 +381,10 @@ class CalculateAllScore2View(View):
             for visit in previous_visits:
                 if not total_chol and visit.cholesterol_total:
                     total_chol = float(visit.cholesterol_total)
+                    data_source = 'mixed'
                 if not hdl_chol and visit.cholesterol_hdl:
                     hdl_chol = float(visit.cholesterol_hdl)
+                    data_source = 'mixed'
                 if total_chol and hdl_chol:
                     break
         
@@ -434,25 +398,28 @@ class CalculateAllScore2View(View):
             if total_chol is None:
                 total_chol = self._get_median_value(age_group_start, age_group_end, 'total')
                 info_parts.append(f"cholesterol_całkowity_mediana_{age_group_start}-{age_group_end}")
+                data_source = 'median'
             
             if hdl_chol is None:
                 hdl_chol = self._get_median_value(age_group_start, age_group_end, 'hdl')
                 info_parts.append(f"cholesterol_HDL_mediana_{age_group_start}-{age_group_end}")
+                data_source = 'median'
         
         if info_parts:
-            return total_chol, hdl_chol, f"uzupełnione medianą: {', '.join(info_parts)}"
+            return total_chol, hdl_chol, f"uzupełnione medianą: {', '.join(info_parts)}", data_source
         
-        return total_chol, hdl_chol, "niepełne dane"
+        return total_chol, hdl_chol, "niepełne dane", data_source
     
-    def _get_diabetes_lab_values(self, patient: Patient, visit_date: date) -> Tuple[Optional[float], Optional[float], str]:
-        """Get eGFR and HbA1c values with fallback logic"""
+    def _get_diabetes_lab_values(self, patient: Patient, visit_date: date) -> Tuple[Optional[float], Optional[float], str, str]:
+        """Get eGFR and HbA1c values with fallback logic - returns data source"""
         # First try current visit
         current_visit = patient.visits.filter(visit_date=visit_date).first()
         if current_visit and current_visit.egfr and current_visit.hba1c:
             return (
-                float(current_visit.egfr),
                 float(current_visit.hba1c),
-                "aktualna wizyta"
+                float(current_visit.egfr),
+                "aktualna wizyta",
+                'visit'
             )
         
         # Look for previous visits
@@ -465,15 +432,17 @@ class CalculateAllScore2View(View):
         for visit in previous_visits:
             if visit.egfr and visit.hba1c:
                 return (
-                    float(visit.egfr),
                     float(visit.hba1c),
-                    f"poprzednia wizyta ({visit.visit_date})"
+                    float(visit.egfr),
+                    f"poprzednia wizyta ({visit.visit_date})",
+                    'previous_visit'
                 )
         
         # Try to complete partial data
         egfr = None
         hba1c = None
         info_parts = []
+        data_source = 'visit'
         
         if current_visit:
             egfr = float(current_visit.egfr) if current_visit.egfr else None
@@ -484,8 +453,10 @@ class CalculateAllScore2View(View):
             for visit in previous_visits:
                 if not egfr and visit.egfr:
                     egfr = float(visit.egfr)
+                    data_source = 'mixed'
                 if not hba1c and visit.hba1c:
                     hba1c = float(visit.hba1c)
+                    data_source = 'mixed'
                 if egfr and hba1c:
                     break
         
@@ -499,15 +470,17 @@ class CalculateAllScore2View(View):
             if egfr is None:
                 egfr = self._get_median_value(age_group_start, age_group_end, 'egfr')
                 info_parts.append(f"eGFR_mediana_{age_group_start}-{age_group_end}")
+                data_source = 'median'
             
             if hba1c is None:
                 hba1c = self._get_median_value(age_group_start, age_group_end, 'hba1c')
                 info_parts.append(f"HbA1c_mediana_{age_group_start}-{age_group_end}")
+                data_source = 'median'
         
         if info_parts:
-            return egfr, hba1c, f"uzupełnione medianą: {', '.join(info_parts)}"
+            return hba1c, egfr, f"uzupełnione medianą: {', '.join(info_parts)}", data_source
         
-        return egfr, hba1c, "niepełne dane"
+        return hba1c, egfr, "niepełne dane", data_source
     
     def _get_median_value(self, age_start: int, age_end: int, value_type: str) -> Optional[float]:
         """Calculate median value for age group"""
@@ -543,36 +516,95 @@ class CalculateAllScore2View(View):
             return None
         
         return float(np.median([float(v) for v in values]))
+
+
+class CalculateAllScore2View(View):
+    """Calculate SCORE2 for all patients"""
     
-    def _create_or_update_result(self, **result_data) -> Score2Result:
-        """Create or update Score2Result"""
-        patient = result_data.pop('patient')
-        visit = result_data.pop('visit')
+    def post(self, request):
+        try:
+            results = self._calculate_scores_for_all()
+            return JsonResponse({
+                'success': True,
+                'results': results
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
+    
+    def _calculate_scores_for_all(self):
+        """Calculate scores for all eligible patients"""
+        # Get all patients with visits in score-eligible age range (40-89)
+        today = date.today()
+        min_date = today - relativedelta(years=90)
+        max_date = today - relativedelta(years=40)
         
-        # Try to find existing result for this patient/visit combination
-        existing = Score2Result.objects.filter(
-            patient=patient,
-            visit=visit
-        ).order_by('-created_at').first()
+        patients = Patient.objects.filter(
+            visits__isnull=False,
+            date_of_birth__gt=min_date,
+            date_of_birth__lte=max_date
+        ).distinct()
         
-        # Always create new result to track history
-        result = Score2Result.objects.create(
-            patient=patient,
-            visit=visit,
-            **result_data
-        )
+        total_processed = 0
+        successful_calculations = 0
+        failed_calculations = 0
+        excluded_patients = 0
         
-        return result
+        calculator = CalculateScore2View()
+        
+        with transaction.atomic():
+            for patient in patients:
+                latest_visit = patient.get_latest_visit()
+                if not latest_visit:
+                    continue
+                
+                try:
+                    result = calculator._calculate_score_for_visit(patient, latest_visit)
+                    total_processed += 1
+                    
+                    if result.is_calculation_successful:
+                        successful_calculations += 1
+                    else:
+                        if result.missing_data_reason:
+                            failed_calculations += 1
+                        else:
+                            excluded_patients += 1
+                            
+                except Exception as e:
+                    print(f"Error processing patient {patient.pesel}: {str(e)}")
+                    failed_calculations += 1
+                    continue
+        
+        return {
+            'total_processed': total_processed,
+            'successful_calculations': successful_calculations,
+            'failed_calculations': failed_calculations,
+            'excluded_patients': excluded_patients,
+        }
 
 
 class Score2StatsView(View):
     """View for SCORE2 statistics and dashboard"""
     
     def get(self, request):
-        # Overall statistics
+        # Overall statistics - only for score-eligible patients
+        today = date.today()
+        min_date = today - relativedelta(years=90)
+        max_date = today - relativedelta(years=40)
+        
+        eligible_patients = Patient.objects.filter(
+            date_of_birth__gt=min_date,
+            date_of_birth__lte=max_date
+        )
+        
         total_patients = Patient.objects.count()
-        patients_with_visits = Patient.objects.filter(visits__isnull=False).distinct().count()
-        patients_with_scores = Patient.objects.filter(score2_results__isnull=False).distinct().count()
+        eligible_count = eligible_patients.count()
+        patients_with_visits = eligible_patients.filter(visits__isnull=False).distinct().count()
+        patients_with_scores = eligible_patients.filter(
+            score2_results__is_calculation_successful=True
+        ).distinct().count()
         
         # Score type distribution
         score_type_stats = {}
@@ -594,6 +626,8 @@ class Score2StatsView(View):
         
         # Risk level distribution
         risk_stats = {}
+        total_successful = Score2Result.objects.filter(is_calculation_successful=True).count()
+        
         for risk_level, display_name in Score2Result.RISK_LEVEL_CHOICES:
             count = Score2Result.objects.filter(
                 risk_level=risk_level,
@@ -603,7 +637,7 @@ class Score2StatsView(View):
                 risk_stats[risk_level] = {
                     'count': count,
                     'display_name': display_name,
-                    'percentage': round((count / patients_with_scores * 100), 1) if patients_with_scores > 0 else 0
+                    'percentage': round((count / total_successful * 100), 1) if total_successful > 0 else 0
                 }
         
         # Failed calculations
@@ -613,6 +647,7 @@ class Score2StatsView(View):
         
         context = {
             'total_patients': total_patients,
+            'eligible_patients': eligible_count,
             'patients_with_visits': patients_with_visits,
             'patients_with_scores': patients_with_scores,
             'score_type_stats': score_type_stats,
