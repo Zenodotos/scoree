@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}{{ patient.full_name|default:patient.pesel }} - System SCORE2{% endblock %}
 
@@ -27,6 +28,32 @@
     .trend-up { color: #dc2626; }
     .trend-down { color: #16a34a; }
     .trend-stable { color: #6b7280; }
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        display: none;
+    }
+    .success-message {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 2rem;
+        border-radius: 1rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        z-index: 10000;
+        text-align: center;
+        display: none;
+    }
 </style>
 {% endblock %}
 
@@ -69,12 +96,12 @@
                 </div>
                 <div class="mt-4 flex md:mt-0 md:ml-4">
                     {% if latest_visit and possible_scores %}
-                        <button type="button" onclick="calculateScore({{ patient.pk }})" 
-                                class="btn-success mr-3" id="calculate-btn">
+                        <button type="button" onclick="calculateScoreForAll({{ patient.pk }})" 
+                                class="btn-success mr-3" id="calculate-all-btn">
                             <svg class="w-4 h-4 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16a2 2 0 002 2z"></path>
                             </svg>
-                            Oblicz SCORE2
+                            Oblicz SCORE2 dla wszystkich
                         </button>
                     {% endif %}
                     <a href="{% url 'patients:patient_list' %}" class="btn-secondary">
@@ -91,93 +118,75 @@
 {% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="space-y-6">
     <!-- Patient Info -->
-    <div class="lg:col-span-1">
-        <div class="card mb-6">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Informacje o pacjencie</h3>
-            </div>
-            <div class="p-6 space-y-4">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0 h-12 w-12">
-                        <div class="h-12 w-12 rounded-full bg-gray-300 flex items-center justify-center">
-                            <span class="text-lg font-medium text-gray-700">
-                                {{ patient.full_name|default:patient.pesel|slice:":2"|upper }}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="ml-4">
-                        <div class="text-lg font-medium text-gray-900">
-                            {{ patient.full_name|default:"Brak nazwiska" }}
-                        </div>
-                        <div class="text-sm text-gray-500">
-                            PESEL: {{ patient.pesel }}
-                        </div>
-                    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2">
+            <div class="card">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Podstawowe informacje</h3>
                 </div>
-
-                <div class="grid grid-cols-1 gap-3">
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-gray-500">Data urodzenia:</span>
-                        <span class="text-sm text-gray-900">{{ patient.date_of_birth }}</span>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">PESEL</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ patient.pesel }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Imię i nazwisko</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ patient.full_name|default:"Brak danych" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Płeć</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                {% if patient.gender == 'M' %}Mężczyzna{% else %}Kobieta{% endif %}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Wiek</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ patient.age }} lat</dd>
+                        </div>
                     </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-gray-500">Wiek:</span>
-                        <span class="text-sm text-gray-900">{{ patient.age }} lat</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-gray-500">Płeć:</span>
-                        <span class="text-sm text-gray-900">
-                            {% if patient.gender == 'M' %}Mężczyzna{% else %}Kobieta{% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-gray-500">Cukrzyca:</span>
-                        <span class="text-sm">
-                            {% if has_diabetes %}
-                                <span class="text-red-600 font-medium">Tak</span>
-                                {% if diabetes_age %}
-                                    <span class="text-gray-500">(wiek diagnozy: {{ diabetes_age }} lat)</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="text-green-600">Nie</span>
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-gray-500">Status palenia:</span>
-                        <span class="text-sm text-gray-900">
-                            {% if smoking_status == 'smoker' %}
-                                <span class="text-red-600">Pali</span>
-                            {% elif smoking_status == 'non_smoker' %}
-                                <span class="text-green-600">Nie pali</span>
-                            {% else %}
-                                <span class="text-gray-500">Zakładany niepali</span>
-                            {% endif %}
-                            <div class="text-xs text-gray-400">({{ smoking_info }})</div>
-                        </span>
+                    
+                    <!-- Smoking Status -->
+                    <div class="mt-6 border-t border-gray-200 pt-4">
+                        <form method="post" class="flex items-center space-x-4">
+                            {% csrf_token %}
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700">Status palenia</label>
+                                <select name="smoking_status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="smoker" {% if patient.smoking_status == 'smoker' %}selected{% endif %}>Palący</option>
+                                    <option value="non_smoker" {% if patient.smoking_status == 'non_smoker' %}selected{% endif %}>Niepalący</option>
+                                    <option value="ex_smoker" {% if patient.smoking_status == 'ex_smoker' %}selected{% endif %}>Były palacz</option>
+                                </select>
+                            </div>
+                            <button type="submit" name="update_smoking" class="btn-primary mt-5">
+                                Aktualizuj
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- SCORE2 Statistics -->
+        <!-- SCORE2 Stats -->
         {% if score_stats %}
-        <div class="card mb-6">
+        <div class="card">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h3 class="text-lg font-medium text-gray-900">Statystyki SCORE2</h3>
             </div>
             <div class="p-6">
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-gray-900">{{ score_stats.count }}</div>
-                        <div class="text-sm text-gray-500">Obliczenia</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-gray-900">{{ score_stats.average_score|floatformat:1 }}%</div>
-                        <div class="text-sm text-gray-500">Średnia</div>
-                    </div>
+                <!-- Chart for multiple results -->
+                {% if score_stats.count > 1 %}
+                <div class="mb-6">
+                    <canvas id="score-chart" width="400" height="200"></canvas>
+                </div>
+                {% endif %}
+                
+                <div class="text-center mb-4">
+                    <div class="text-sm text-gray-500">{{ score_stats.count }} obliczeń</div>
+                    <div class="text-2xl font-bold text-gray-900">{{ score_stats.average_score|floatformat:1 }}%</div>
+                    <div class="text-sm text-gray-500">Średnia</div>
                 </div>
                 
                 <div class="space-y-3">
@@ -205,272 +214,237 @@
             </div>
         </div>
         {% endif %}
-
-        <!-- Data Sources for SCORE2 -->
-        {% if data_sources %}
-        <div class="card">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Źródła danych do SCORE2</h3>
-            </div>
-            <div class="p-6">
-                {% for score_type, info in data_sources.items %}
-                <div class="mb-4 {% if not forloop.last %}border-b border-gray-200 pb-4{% endif %}">
-                    <h4 class="font-medium text-gray-900 mb-2">{{ score_type }}</h4>
-                    
-                    {% if info.missing %}
-                    <div class="text-sm text-red-600 mb-2">
-                        <strong>Brakuje:</strong> {{ info.missing|join:", " }}
-                    </div>
-                    {% endif %}
-                    
-                    {% if info.sources %}
-                    <div class="space-y-1">
-                        {% for param, source in info.sources.items %}
-                        <div class="text-xs text-gray-600">
-                            <span class="font-medium">{{ param|title }}:</span> {{ source }}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
     </div>
 
-    <!-- Main Content -->
-    <div class="lg:col-span-2 space-y-6">
-        <!-- SCORE2 Results -->
-        {% if patient.score2_results.all %}
-        <div class="card">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Wyniki SCORE2</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wynik</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ryzyko</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Szczegóły</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        {% for result in patient.score2_results.all %}
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ result.visit.visit_date }}
-                                <div class="text-xs text-gray-500">Wiek: {{ result.age_at_calculation }} lat</div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {{ result.score_type }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {% if result.is_calculation_successful %}
-                                    <span class="text-lg font-bold">{{ result.score_value }}%</span>
-                                {% else %}
-                                    <span class="text-red-600">Błąd</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 py-1 text-xs font-medium rounded-full risk-{{ result.risk_level }}">
-                                    {{ result.risk_level_display }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-sm text-gray-500">
-                                {% if result.calculation_notes %}
-                                    <div class="max-w-xs truncate" title="{{ result.calculation_notes }}">
-                                        {{ result.calculation_notes }}
-                                    </div>
-                                {% endif %}
-                                {% if result.missing_data_reason %}
-                                    <div class="text-red-600">{{ result.missing_data_reason }}</div>
-                                {% endif %}
-                                <div class="text-xs text-gray-400 mt-1">
-                                    Źródło: {{ result.get_data_source_display }}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <!-- Visits -->
+    <div class="card">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Historia wizyt</h3>
         </div>
-        {% endif %}
-
-        <!-- Visits -->
-        <div class="card">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Historia wizyt</h3>
-            </div>
-            <div class="space-y-4 p-6">
-                {% for data in visit_data %}
-                <div class="border border-gray-200 rounded-lg p-4" id="visit-{{ data.visit.id }}">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <h4 class="font-medium text-gray-900">{{ data.visit.visit_date }}</h4>
-                            <p class="text-sm text-gray-500">{{ data.visit.quarter }} • Wiek: {{ data.age }} lat</p>
-                        </div>
-                        <div class="flex space-x-2">
-                            <button onclick="toggleEdit({{ data.visit.id }})" class="btn-secondary text-xs">
-                                Edytuj
+        <div class="space-y-4 p-6">
+            {% for data in visit_data %}
+            <div class="border border-gray-200 rounded-lg p-4" id="visit-{{ data.visit.id }}">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <h4 class="font-medium text-gray-900">{{ data.visit.visit_date }}</h4>
+                        <p class="text-sm text-gray-500">{{ data.visit.quarter }} • Wiek: {{ data.age }} lat</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="toggleEdit({{ data.visit.id }})" class="btn-secondary text-xs">
+                            Edytuj
+                        </button>
+                        {% if not data.score or not data.score.is_calculation_successful %}
+                        <form method="post" class="inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="visit_id" value="{{ data.visit.id }}">
+                            <button type="submit" name="calculate_visit_score" class="btn-primary text-xs">
+                                Oblicz SCORE2
                             </button>
-                            {% if not data.score or not data.score.is_calculation_successful %}
-                            <form method="post" class="inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="visit_id" value="{{ data.visit.id }}">
-                                <button type="submit" name="calculate_visit_score" class="btn-primary text-xs">
-                                    Oblicz SCORE2
-                                </button>
-                            </form>
-                            {% endif %}
-                        </div>
+                        </form>
+                        {% endif %}
                     </div>
+                </div>
 
-                    <!-- Display mode -->
-                    <div id="display-{{ data.visit.id }}">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-        <div class="space-y-1 text-sm">
-            <div class="flex justify-between">
-                <span>Ciśnienie:</span>
-                <span class="{% if not data.visit.systolic_pressure %}text-red-500{% endif %}">
-                    {{ data.visit.systolic_pressure|default:"Brak" }}{% if data.visit.systolic_pressure %} mmHg{% endif %}
-                </span>
-            </div>
-            <div class="flex justify-between">
-                <span>Cholesterol całk.:</span>
-                <span class="{% if not data.visit.cholesterol_total %}text-red-500{% endif %}">
-                    {{ data.visit.cholesterol_total|default:"Brak" }}{% if data.visit.cholesterol_total %} mg/dl{% endif %}
-                </span>
-            </div>
-            <div class="flex justify-between">
-                <span>HDL:</span>
-                <span class="{% if not data.visit.cholesterol_hdl %}text-red-500{% endif %}">
-                    {{ data.visit.cholesterol_hdl|default:"Brak" }}{% if data.visit.cholesterol_hdl %} mg/dl{% endif %}
-                </span>
-            </div>
-        </div>
-        <div class="space-y-1 text-sm">
-            <div class="flex justify-between">
-                <span>HbA1c:</span>
-                <span class="{% if not data.visit.hba1c %}text-red-500{% endif %}">
-                    {{ data.visit.hba1c|default:"Brak" }}{% if data.visit.hba1c %}%{% endif %}
-                </span>
-            </div>
-            <div class="flex justify-between">
-                <span>eGFR:</span>
-                <span class="{% if not data.visit.egfr %}text-red-500{% endif %}">
-                    {{ data.visit.egfr|default:"Brak" }}{% if data.visit.egfr %} ml/min/1.73m²{% endif %}
-                </span>
-            </div>
-        </div>
-    </div>
-</div>
-
-                        <!-- Diagnozy -->
-                        {% if data.visit.diagnoses.all %}
-                        <div class="mb-3">
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">Diagnozy</h5>
-                            <div class="flex flex-wrap gap-1">
-                                {% for diagnosis in data.visit.diagnoses.all %}
-                                    <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                        {{ diagnosis.diagnosis_code }}
-                                    </span>
-                                {% endfor %}
+                <!-- Display mode -->
+                <div id="display-{{ data.visit.id }}">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div class="space-y-1 text-sm">
+                            <div class="flex justify-between">
+                                <span>Ciśnienie:</span>
+                                <span class="{% if not data.visit.systolic_pressure %}text-red-500{% endif %}">
+                                    {{ data.visit.systolic_pressure|default:"Brak" }}{% if data.visit.systolic_pressure %} mmHg{% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Cholesterol całk.:</span>
+                                <div class="text-right">
+                                    {% if data.score and data.score.cholesterol_total and not data.visit.cholesterol_total %}
+                                        <span class="text-green-600">{{ data.score.cholesterol_total }} mg/dl</span>
+                                        <div class="text-xs text-blue-600 italic">{{ data.score.cholesterol_info }}</div>
+                                    {% else %}
+                                        <span class="{% if not data.visit.cholesterol_total %}text-red-500{% endif %}">
+                                            {{ data.visit.cholesterol_total|default:"Brak" }}{% if data.visit.cholesterol_total %} mg/dl{% endif %}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Cholesterol HDL:</span>
+                                <div class="text-right">
+                                    {% if data.score and data.score.cholesterol_hdl and not data.visit.cholesterol_hdl %}
+                                        <span class="text-green-600">{{ data.score.cholesterol_hdl }} mg/dl</span>
+                                        <div class="text-xs text-blue-600 italic">{{ data.score.cholesterol_info }}</div>
+                                    {% else %}
+                                        <span class="{% if not data.visit.cholesterol_hdl %}text-red-500{% endif %}">
+                                            {{ data.visit.cholesterol_hdl|default:"Brak" }}{% if data.visit.cholesterol_hdl %} mg/dl{% endif %}
+                                        </span>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
-                        {% endif %}
-
-                        <!-- SCORE2 Result -->
-                        <div class="border-t border-gray-100 pt-3">
-                            {% if data.score %}
-                                {% if data.score.is_calculation_successful %}
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <span class="text-lg font-bold">{{ data.score.score_value }}%</span>
-                                            <span class="text-sm text-gray-500 ml-2">{{ data.score.score_type }}</span>
-                                        </div>
-                                        <span class="px-2 py-1 text-xs font-medium rounded-full risk-{{ data.score.risk_level }}">
-                                            {{ data.score.risk_level_display }}
+                        <div class="space-y-1 text-sm">
+                            <div class="flex justify-between">
+                                <span>HbA1c:</span>
+                                <div class="text-right">
+                                    {% if data.score and data.score.hba1c and not data.visit.hba1c %}
+                                        <span class="text-green-600">{{ data.score.hba1c }} %</span>
+                                        <div class="text-xs text-blue-600 italic">dane z poprzedniej wizyty</div>
+                                    {% else %}
+                                        <span class="{% if not data.visit.hba1c %}text-red-500{% endif %}">
+                                            {{ data.visit.hba1c|default:"Brak" }}{% if data.visit.hba1c %} %{% endif %}
                                         </span>
-                                    </div>
-                                    {% if data.score.calculation_notes %}
-                                    <div class="text-xs text-gray-500 mt-1">{{ data.score.calculation_notes }}</div>
                                     {% endif %}
-                                {% else %}
-                                    <div class="text-red-600 text-sm">
-                                        Błąd obliczenia: {{ data.score.missing_data_reason }}
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="text-gray-400 text-sm">SCORE2 nie obliczono</div>
-                            {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>eGFR:</span>
+                                <div class="text-right">
+                                    {% if data.score and data.score.egfr and not data.visit.egfr %}
+                                        <span class="text-green-600">{{ data.score.egfr }} ml/min/1.73m²</span>
+                                        <div class="text-xs text-blue-600 italic">dane z poprzedniej wizyty</div>
+                                    {% else %}
+                                        <span class="{% if not data.visit.egfr %}text-red-500{% endif %}">
+                                            {{ data.visit.egfr|default:"Brak" }}{% if data.visit.egfr %} ml/min/1.73m²{% endif %}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Edit mode -->
-                    <div id="edit-{{ data.visit.id }}" style="display: none;">
-    <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="visit_id" value="{{ data.visit.id }}">
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Ciśnienie skurczowe (mmHg)</label>
-                <input type="number" name="systolic_pressure" value="{{ data.visit.systolic_pressure|default:'' }}" 
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Cholesterol całkowity (mg/dl)</label>
-                <input type="number" step="0.01" name="cholesterol_total" value="{{ data.visit.cholesterol_total|default:'' }}" 
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Cholesterol HDL (mg/dl)</label>
-                <input type="number" step="0.01" name="cholesterol_hdl" value="{{ data.visit.cholesterol_hdl|default:'' }}" 
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">HbA1c (%)</label>
-                <input type="number" step="0.01" name="hba1c" value="{{ data.visit.hba1c|default:'' }}" 
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">eGFR (ml/min/1.73m²)</label>
-                <input type="number" step="0.01" name="egfr" value="{{ data.visit.egfr|default:'' }}" 
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            </div>
-        </div>
-        
-        <div class="flex space-x-3">
-            <button type="submit" name="update_visit_and_calculate" class="btn-primary">
-                Zapisz i oblicz SCORE2
-            </button>
-            <button type="submit" name="update_visit" class="btn-secondary">
-                Tylko zapisz
-            </button>
-            <button type="button" onclick="toggleEdit({{ data.visit.id }})" class="btn-secondary">
-                Anuluj
-            </button>
-        </div>
-    </form>
-</div>
+                    <!-- SCORE2 Results -->
+                    {% if data.score %}
+                    <div class="mt-3 p-3 bg-gray-50 rounded-lg">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <span class="text-sm font-medium text-gray-900">{{ data.score.score_type }}</span>
+                                {% if data.score.is_calculation_successful %}
+                                    <span class="ml-2 text-lg font-bold text-blue-600">{{ data.score.score_value }}%</span>
+                                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium risk-{{ data.score.risk_level }}">
+                                        {{ data.score.get_risk_level_display }}
+                                    </span>
+                                {% else %}
+                                    <span class="ml-2 text-sm text-red-600">{{ data.score.missing_data_reason }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="text-xs text-gray-500">{{ data.score.created_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
-                {% endfor %}
-            </div>
-        </div>
 
-       
+                <!-- Edit mode -->
+                <div id="edit-{{ data.visit.id }}" style="display: none;">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="visit_id" value="{{ data.visit.id }}">
+                        
+                        <!-- Display form errors if any -->
+                        {% if form.errors %}
+                            <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <div class="text-sm text-red-800">
+                                    <strong>Błędy walidacji:</strong>
+                                    <ul class="mt-1 list-disc list-inside">
+                                        {% for field, errors in form.errors.items %}
+                                            {% for error in errors %}
+                                                <li>{{ field }}: {{ error }}</li>
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Ciśnienie skurczowe (mmHg)</label>
+                                <input type="number" name="systolic_pressure" 
+                                       value="{{ data.visit.systolic_pressure|default:'' }}" 
+                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       min="60" max="300">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Cholesterol całkowity (mg/dl)</label>
+                                <input type="number" step="0.01" name="cholesterol_total" 
+                                       value="{{ data.visit.cholesterol_total|default:''|unlocalize }}" 
+                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       min="0" max="1000">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Cholesterol HDL (mg/dl)</label>
+                                <input type="number" step="0.01" name="cholesterol_hdl" 
+                                       value="{{ data.visit.cholesterol_hdl|default:''|unlocalize }}" 
+                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       min="0" max="200">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">HbA1c (%)</label>
+                                <input type="number" step="0.01" name="hba1c" 
+                                       value="{{ data.visit.hba1c|default:''|unlocalize }}" 
+                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       min="3" max="20">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">eGFR (ml/min/1.73m²)</label>
+                                <input type="number" step="0.01" name="egfr" 
+                                       value="{{ data.visit.egfr|default:''|unlocalize }}" 
+                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       min="0" max="200">
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button type="submit" name="update_visit_and_calculate" class="btn-primary">
+                                Zapisz i oblicz SCORE2
+                            </button>
+                            <button type="submit" name="update_visit" class="btn-secondary">
+                                Tylko zapisz
+                            </button>
+                            <button type="button" onclick="toggleEdit({{ data.visit.id }})" class="btn-secondary">
+                                Anuluj
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-overlay">
+    <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+        <svg class="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-gray-600 font-medium" id="loading-text">Obliczanie SCORE2...</p>
+    </div>
+</div>
+
+<!-- Success Message -->
+<div id="success-message" class="success-message">
+    <div class="mb-4">
+        <svg class="h-16 w-16 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+    </div>
+    <h3 class="text-lg font-semibold text-gray-900 mb-2">Sukces!</h3>
+    <p class="text-gray-600" id="success-text">SCORE2 zostało pomyślnie obliczone dla wszystkich wizyt.</p>
+    <button onclick="hideSuccessMessage()" class="mt-4 btn-primary">OK</button>
 </div>
 
 <script>
-    function calculateScore(patientId) {
-        const btn = document.getElementById('calculate-btn');
+    function calculateScoreForAll(patientId) {
+        const btn = document.getElementById('calculate-all-btn');
         const originalText = btn.innerHTML;
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+        
+        // Show loading overlay
+        loadingOverlay.style.display = 'flex';
+        loadingText.textContent = 'Obliczanie SCORE2 dla wszystkich wizyt...';
         
         btn.disabled = true;
         btn.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Obliczanie...';
@@ -484,14 +458,20 @@
         })
         .then(response => response.json())
         .then(data => {
+            loadingOverlay.style.display = 'none';
+            
             if (data.success) {
-                showMessage('SCORE2 zostało pomyślnie obliczone!', 'success');
-                setTimeout(() => window.location.reload(), 1000);
+                showSuccessMessage('SCORE2 zostało pomyślnie obliczone dla wszystkich wizyt!');
+                setTimeout(() => {
+                    hideSuccessMessage();
+                    window.location.reload();
+                }, 2000);
             } else {
                 showMessage(data.error || 'Wystąpił błąd podczas obliczania SCORE2.', 'error');
             }
         })
         .catch(error => {
+            loadingOverlay.style.display = 'none';
             console.error('Error:', error);
             showMessage('Wystąpił błąd podczas obliczania SCORE2.', 'error');
         })
@@ -511,7 +491,25 @@
         } else {
             displayDiv.style.display = 'none';
             editDiv.style.display = 'block';
+            
+            // Focus on first input when editing
+            const firstInput = editDiv.querySelector('input[type="number"]');
+            if (firstInput) {
+                setTimeout(() => firstInput.focus(), 100);
+            }
         }
+    }
+
+    function showSuccessMessage(message) {
+        const successMessage = document.getElementById('success-message');
+        const successText = document.getElementById('success-text');
+        successText.textContent = message;
+        successMessage.style.display = 'block';
+    }
+
+    function hideSuccessMessage() {
+        const successMessage = document.getElementById('success-message');
+        successMessage.style.display = 'none';
     }
 
     function showMessage(message, type) {
@@ -542,5 +540,163 @@
             setTimeout(() => messageDiv.remove(), 500);
         }, 5000);
     }
+
+    // Hide loading overlay on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const loadingOverlay = document.getElementById('loading-overlay');
+        loadingOverlay.style.display = 'none';
+        
+        // Debug - check if score_stats exists
+        {% if score_stats %}
+        console.log('Score stats found:', {
+            count: {{ score_stats.count }},
+            showChart: {{ score_stats.count }} > 1
+        });
+        {% else %}
+        console.log('No score_stats found');
+        {% endif %}
+        
+        // Add loading state for all forms
+        const forms = document.querySelectorAll('form[method="post"]');
+        forms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const loadingOverlay = document.getElementById('loading-overlay');
+                const loadingText = document.getElementById('loading-text');
+                
+                // Check what type of action is being performed
+                const submitButton = document.activeElement;
+                if (submitButton && submitButton.name === 'update_visit_and_calculate') {
+                    loadingText.textContent = 'Zapisywanie i obliczanie SCORE2...';
+                } else if (submitButton && submitButton.name === 'update_visit') {
+                    loadingText.textContent = 'Zapisywanie wizyty...';
+                } else if (submitButton && submitButton.name === 'calculate_visit_score') {
+                    loadingText.textContent = 'Obliczanie SCORE2...';
+                } else {
+                    loadingText.textContent = 'Przetwarzanie...';
+                }
+                
+                loadingOverlay.style.display = 'flex';
+            });
+        });
+
+        // Create SCORE2 chart if there are multiple results
+        {% if score_stats and score_stats.count > 1 %}
+        createScore2Chart();
+        {% endif %}
+    });
+
+    {% if score_stats and score_stats.count > 1 %}
+    function createScore2Chart() {
+        console.log('Creating SCORE2 chart...');
+        
+        // Prepare data from visit_data
+        const chartData = [];
+        const chartLabels = [];
+        const chartColors = [];
+        
+        {% for data in visit_data %}
+            {% if data.score and data.score.is_calculation_successful %}
+                chartLabels.push('{{ data.visit.visit_date|date:"d.m.Y" }}');
+                chartData.push({{ data.score.score_value|unlocalize }});
+                
+                console.log('Adding data point:', '{{ data.visit.visit_date|date:"d.m.Y" }}', {{ data.score.score_value|unlocalize }});
+                
+                // Color based on score type
+                {% if data.score.score_type == 'SCORE2' %}
+                    chartColors.push('#3B82F6'); // Blue
+                {% elif data.score.score_type == 'SCORE2-Diabetes' %}
+                    chartColors.push('#EF4444'); // Red
+                {% elif data.score.score_type == 'SCORE2-OP' %}
+                    chartColors.push('#F59E0B'); // Orange
+                {% else %}
+                    chartColors.push('#6B7280'); // Gray
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+
+        console.log('Chart data prepared:', {
+            labels: chartLabels,
+            data: chartData,
+            colors: chartColors
+        });
+
+        // Reverse arrays to show chronological order (oldest first)
+        chartLabels.reverse();
+        chartData.reverse();
+        chartColors.reverse();
+
+        const ctx = document.getElementById('score-chart');
+        console.log('Canvas element:', ctx);
+        
+        if (ctx && chartData.length > 0) {
+            console.log('Creating chart with data...');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'SCORE2 (%)',
+                        data: chartData,
+                        backgroundColor: chartColors,
+                        borderColor: chartColors,
+                        borderWidth: 1,
+                        maxBarThickness: 60
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `SCORE2: ${context.parsed.y.toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: Math.max(...chartData) * 1.1,
+                            title: {
+                                display: true,
+                                text: 'SCORE2 (%)'
+                            },
+                            grid: {
+                                color: '#E5E7EB'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(1) + '%';
+                                }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Data wizyty'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    layout: {
+                        padding: {
+                            top: 10,
+                            bottom: 10
+                        }
+                    }
+                }
+            });
+        } else {
+            console.log('Cannot create chart - missing canvas or no data');
+        }
+    }
+    {% endif %}
 </script>
 {% endblock %}

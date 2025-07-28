@@ -1,7 +1,6 @@
 from django.db.models import Q, Count, Prefetch, Max, Avg
-
-# The rest of the imports remain the same:
 from django.shortcuts import render, get_object_or_404, redirect
+from .forms import VisitForm, VisitEditForm, PatientSmokingForm
 from django.contrib import messages
 from django.views.generic import ListView, DetailView
 from django.views import View
@@ -188,7 +187,7 @@ class PatientDetailView(DetailView):
         if 'update_visit' in request.POST:
             visit_id = request.POST.get('visit_id')
             visit = get_object_or_404(Visit, id=visit_id, patient=self.object)
-            form = VisitForm(request.POST, instance=visit)
+            form = VisitEditForm(request.POST, instance=visit)  # Use VisitEditForm instead
             if form.is_valid():
                 try:
                     form.save()
@@ -201,13 +200,17 @@ class PatientDetailView(DetailView):
                 except ValidationError as e:
                     messages.error(request, f'Błąd: {e.message}')
             else:
-                messages.error(request, 'Błąd walidacji formularza.')
+                # Add detailed form errors for debugging
+                error_messages = []
+                for field, errors in form.errors.items():
+                    error_messages.append(f'{field}: {", ".join(errors)}')
+                messages.error(request, f'Błąd walidacji formularza: {"; ".join(error_messages)}')
         
         # Update visit and calculate SCORE2
         elif 'update_visit_and_calculate' in request.POST:
             visit_id = request.POST.get('visit_id')
             visit = get_object_or_404(Visit, id=visit_id, patient=self.object)
-            form = VisitForm(request.POST, instance=visit)
+            form = VisitEditForm(request.POST, instance=visit)  # Use VisitEditForm instead
             if form.is_valid():
                 try:
                     form.save()
@@ -234,7 +237,11 @@ class PatientDetailView(DetailView):
                 except Exception as e:
                     messages.error(request, f'Błąd podczas obliczania: {str(e)}')
             else:
-                messages.error(request, 'Błąd walidacji formularza.')
+                # Add detailed form errors for debugging
+                error_messages = []
+                for field, errors in form.errors.items():
+                    error_messages.append(f'{field}: {", ".join(errors)}')
+                messages.error(request, f'Błąd walidacji formularza: {"; ".join(error_messages)}')
         
         # Calculate SCORE2 for specific visit
         elif 'calculate_visit_score' in request.POST:
